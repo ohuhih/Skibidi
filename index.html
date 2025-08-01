@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TheBot</title>
+    <!-- Load Tailwind CSS for utility classes -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Link to your custom CSS file for styling -->
+    <link rel="stylesheet" href="style.css">
+    <!-- Font Awesome for social media icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body>
+    <!-- Main container for the chatbot application -->
+    <div class="chat-wrapper">
+        <div class="chat-container">
+            <!-- Chatbot header section -->
+            <div class="chat-header">
+                Test Case
+                <!-- NEW: Clear Chat Button -->
+                <button id="clear-chat-btn" class="header-btn" title="Clear Chat">
+                    <i class="fas fa-trash-alt"></i>
+                </button>
+            </div>
+
+            <!-- Area where chat messages will be displayed -->
+            <div id="chat-display" class="chat-display">
+                <!-- EDITED: Initial welcome message with new class -->
+                <div class="initial-message">
+                    Avoid sharing sensitive information.
+                </div>
+                <!-- Messages will be dynamically added here by JavaScript -->
+            </div>
+
+            <!-- Input area for user to type messages and send button -->
+            <div class="chat-input-area">
+                <!-- Text input field for user messages -->
+                <input type="text" id="user-input" class="chat-input" placeholder="Type your message...">
+                <!-- Button to send the message -->
+                <button id="send-button" class="send-button">
+                    Send
+                    <!-- SVG icon for the send button -->
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="w-5 h-5 ml-2">
+                        <path d="M3.478 2.405a.75.75 0 00-.926.94l2.432 7.905H13.5a.75.75 0 010 1.5H4.984l-2.432 7.905a.75.75 0 00.926.94 60.519 60.519 0 0018.445-8.986.75.75 0 000-1.218A60.517 60.517 0 003.478 2.405z" />
+                    </svg>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Professional Footer Section -->
+    <footer class="credits-footer">
+        <div class="footer-main-content">
+            <div class="credit-column">
+                <h4>Development</h4>
+                <p>Pad (Backend)</p>
+                <p>Los (Backend)</p>
+                <p>Yuu (Frontend)</p>
+            </div>
+             <div class="credit-column">
+                <h4>Resources</h4>
+                <a href="#" class="footer-link">Help Center</a>
+                <a href="#" class="footer-link">API Documentation</a>
+                <a href="#" class="footer-link">Status Page</a>
+            </div>
+             <div class="credit-column">
+                <h4>Legal</h4>
+                <!-- This link will now open the privacy modal -->
+                <a href="#" id="open-privacy-link" class="footer-link">Privacy Policy</a>
+                <!-- This link will now open the terms modal -->
+                <a href="#" id="open-terms-link" class="footer-link">Terms of Service</a>
+            </div>
+        </div>
+        <div class="footer-secondary-content">
+            <p class="copyright">&copy; 2025 Paggy Inc. All rights reserved.</p>
+            <div class="social-icons">
+                <a href="#" class="social-link"><i class="fab fa-twitter"></i></a>
+                <a href="#" class="social-link"><i class="fab fa-github"></i></a>
+                <a href="#" class="social-link"><i class="fab fa-linkedin-in"></i></a>
+            </div>
+        </div>
+    </footer>
+
+    <!-- Cookie Notification Banner -->
+    <div id="cookie-banner" class="cookie-banner">
+        <p>This website does not store cookies or track your personal data. Enjoy your privacy!</p>
+        <button id="cookie-dismiss-btn">Got it!</button>
+    </div>
+
+    <!-- Terms and Conditions Modal -->
+    <div id="terms-modal" class="modal-overlay">
+        <div class="modal-content">
+            <button id="close-terms-btn" class="modal-close-btn">&times;</button>
+            <h2>Terms and Conditions</h2>
+            <p>Welcome to our website. If you continue to browse and use this website, you are agreeing to comply with and be bound by the following terms and conditions of use...</p>
+            <p><strong>1. Use of the Service:</strong> The content of the pages of this website is for your general information and use only. It is subject to change without notice.</p>
+            <p><strong>2. Lorm Ipsom:</strong> This website is provided “as is,” with all faults, and we express no representations, of any kind related to this website or the materials contained on this website.</p>
+            <p><strong>3. Limitation of Liability:</strong> In no event shall we be held liable for anything arising out of or in any way connected with your use of this website.</p>
+            <p><em>Last updated: July 2025</em></p>
+        </div>
+    </div>
+
+    <!-- Privacy Policy Modal -->
+    <div id="privacy-modal" class="modal-overlay">
+        <div class="modal-content">
+            <button id="close-privacy-btn" class="modal-close-btn">&times;</button>
+            <h2>Privacy Policy</h2>
+            <p>Your privacy is important to us. It is our policy to respect your privacy regarding any information we may collect from you across our website...</p>
+            <p><strong>Information we collect:</strong> We do not collect any personally identifying information. The chat messages you provide are processed to generate a response and are not stored long-term.</p>
+            <p><strong>Cookies:</strong> As stated, this website does not use cookies.</p>
+            <p><strong>Contact Us:</strong> If you have any questions about this Privacy Policy, please contact us.</p>
+            <p><em>Last updated: July 2025</em></p>
+        </div>
+    </div>
+
+    <script type="module" src="https://cdn.jsdelivr.net/npm/@xenova/transformers@2.17.1"></script>
+    <script src="script.js"></script>
+</body>
+</html>

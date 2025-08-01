@@ -1,0 +1,436 @@
+/*
+ * Custom CSS for Chatbot Interface
+ */
+
+/* --- Global Styles & Scroll Snap Container --- */
+html {
+    scroll-behavior: smooth;
+}
+
+body {
+    font-family: 'Inter', sans-serif;
+    margin: 0;
+    /* This makes the body the container for scroll snapping */
+    height: 100vh;
+    overflow-y: scroll;
+    scroll-snap-type: y mandatory;
+    
+    /* The gradient background is restored to the body */
+    background: linear-gradient(180deg, #0c1a4d 0%, #2563eb 100%);
+    color: #f9fafb;
+}
+
+/* --- Full-Screen Sections --- */
+.chat-wrapper, .credits-footer {
+    height: 100vh;
+    width: 100%;
+    box-sizing: border-box;
+    /* This makes each section a snap point */
+    scroll-snap-align: start;
+    position: relative; /* Important for positioning children */
+}
+
+/* --- Backgrounds for each section --- */
+.chat-wrapper {
+    /* Background is now inherited from the body */
+    display: flex;
+    flex-direction: column;
+}
+
+.credits-footer {
+    background-color: #111827; /* Dark background for the footer */
+}
+
+/* --- Chat Wrapper Content Layout --- */
+.chat-container {
+    flex-grow: 1;
+    display: flex;
+    flex-direction: column;
+    height: 100%; /* Ensure it fills the wrapper */
+}
+
+/* --- Chat Header --- */
+.chat-header {
+    background-color: transparent; /* No background */
+    color: #ffffff; /* White text */
+    padding: 1.5rem;
+    font-weight: 600;
+    font-size: 1.5rem;
+    text-align: center;
+    text-shadow: 0 2px 4px rgba(0,0,0,0.2); /* Add shadow for readability */
+    position: relative; /* For positioning the clear button */
+}
+
+/* --- Header Button --- */
+.header-btn {
+    position: absolute;
+    top: 50%;
+    transform: translateY(-50%);
+    right: 1.5rem;
+    background: none;
+    border: none;
+    color: #9ca3af;
+    font-size: 1.25rem;
+    cursor: pointer;
+    padding: 0.5rem;
+    transition: color 0.2s, transform 0.2s;
+}
+
+.header-btn:hover {
+    color: #ffffff;
+    transform: translateY(-50%) scale(1.1);
+}
+
+
+/* --- Chat Display Area --- */
+.chat-display {
+    flex-grow: 1; /* Takes up the available space */
+    padding: 1.5rem;
+    overflow-y: auto; /* Allows scrolling */
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+}
+
+/* --- NEW: Initial Message --- */
+.initial-message {
+    text-align: center;
+    color: #9ca3af; /* Gray 400 */
+    font-size: 0.875rem;
+    padding: 1rem 0;
+}
+
+/* --- Chat Input Area --- */
+.chat-input-area {
+    display: flex;
+    padding: 1rem 1.5rem;
+    /* Semi-transparent dark background */
+    background-color: rgba(17, 24, 39, 0.8); 
+    backdrop-filter: blur(10px); /* Frosted glass effect */
+    border-top: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+/* --- Message Bubbles and Metadata --- */
+.message-wrapper {
+    display: flex;
+    align-items: flex-end; /* Align items to the bottom */
+    gap: 0.5rem;
+    max-width: 90%; /* Control max width of the whole component */
+}
+
+/* Align user messages to the right */
+.user-wrapper {
+    align-self: flex-end;
+    flex-direction: row-reverse; /* Reverses order for user: bubble, copy, time */
+}
+
+/* Align chatbot messages to the left */
+.chatbot-wrapper {
+    align-self: flex-start;
+    flex-direction: row; /* Default order for chatbot: bubble, copy, time */
+}
+
+.message-bubble {
+    max-width: 100%; /* Bubble takes width from wrapper */
+    padding: 0.75rem 1.25rem;
+    border-radius: 1.25rem;
+    word-wrap: break-word;
+    box-shadow: 0 4px 10px rgba(0,0,0,0.2);
+}
+
+.user-message {
+    background-color: #4f46e5; /* Indigo 600 */
+    color: white;
+}
+
+.chatbot-message {
+    background-color: #f9fafb; /* Almost white */
+    color: #1f2937; /* Dark gray text */
+}
+
+.timestamp {
+    font-size: 0.75rem;
+    color: #9ca3af;
+    margin-bottom: 0.5rem; /* Align with bottom of bubble */
+    white-space: nowrap; /* Prevent wrapping */
+}
+
+.copy-btn {
+    background: none;
+    border: none;
+    color: #6b7280;
+    cursor: pointer;
+    font-size: 0.9rem;
+    padding: 0.5rem;
+    border-radius: 50%;
+    margin-bottom: 0.25rem;
+    transition: background-color 0.2s, color 0.2s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.copy-btn:hover {
+    background-color: rgba(255, 255, 255, 0.1);
+    color: #ffffff;
+}
+
+/* --- Chat Input Field --- */
+.chat-input {
+    flex-grow: 1;
+    padding: 0.75rem 1rem;
+    border: 1px solid #4b5563; /* Gray 600 */
+    border-radius: 1.5rem;
+    outline: none;
+    font-size: 1rem;
+    background-color: #374151; /* Gray 700 */
+    color: #f9fafb;
+    transition: border-color 0.2s ease-in-out, background-color 0.2s ease-in-out;
+}
+
+.chat-input::placeholder {
+    color: #9ca3af; /* Gray 400 */
+}
+
+.chat-input:focus {
+    border-color: #6366f1; /* Indigo 500 */
+    background-color: #1f2937; /* Gray 800 */
+}
+
+/* --- Send Button --- */
+.send-button {
+    background-color: #10b981;
+    color: white;
+    border: none;
+    border-radius: 1.5rem;
+    padding: 0.75rem 1.25rem;
+    margin-left: 0.75rem;
+    cursor: pointer;
+    font-size: 1rem;
+    font-weight: 500;
+    transition: background-color 0.2s ease-in-out;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.send-button:hover {
+    background-color: #059669;
+}
+
+/* --- Loading Indicator --- */
+.loading-indicator {
+    align-self: flex-start;
+    padding: 0.75rem 1rem;
+    border-radius: 1.25rem;
+    background-color: #dbeafe; /* Blue 100 */
+    color: #1e40af; /* Blue 800 */
+    font-style: italic;
+}
+
+/* --- Footer Section --- */
+.credits-footer {
+    color: #d1d5db; /* Gray 300 for soft white text */
+    padding: 3rem;
+    text-align: center;
+    /* Center the content within the full-screen footer */
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+}
+
+.footer-main-content {
+    max-width: 800px;
+    margin: 0 auto;
+    display: flex;
+    justify-content: space-around;
+    align-items: flex-start;
+    gap: 4rem; /* Increased gap for better spacing */
+    width: 100%;
+    margin-bottom: 3rem;
+}
+
+.credit-column h4 {
+    font-size: 1rem;
+    font-weight: 600;
+    color: #ffffff;
+    margin-bottom: 1rem;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+}
+
+.credit-column p {
+    margin: 0.5rem 0;
+    font-size: 0.9rem;
+}
+
+.footer-link {
+    display: block;
+    color: #9ca3af;
+    text-decoration: none;
+    margin-bottom: 0.5rem;
+    transition: color 0.2s;
+}
+
+.footer-link:hover {
+    color: #ffffff;
+}
+
+.footer-secondary-content {
+    border-top: 1px solid #374151;
+    padding-top: 2rem;
+    width: 100%;
+    max-width: 800px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.copyright {
+    font-size: 0.875rem;
+    color: #6b7280;
+}
+
+.social-icons {
+    display: flex;
+    gap: 1rem;
+}
+
+.social-link {
+    color: #9ca3af;
+    font-size: 1.25rem;
+    transition: color 0.2s, transform 0.2s;
+}
+
+.social-link:hover {
+    color: #ffffff;
+    transform: scale(1.1);
+}
+
+/* --- Cookie Banner --- */
+.cookie-banner {
+    position: fixed;
+    bottom: 1rem;
+    left: 50%;
+    transform: translateX(-50%);
+    background-color: rgba(17, 24, 39, 0.8);
+    backdrop-filter: blur(10px);
+    color: #e5e7eb;
+    padding: 1rem 1.5rem;
+    border-radius: 0.5rem;
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    z-index: 1000;
+    box-shadow: 0 -4px 15px rgba(0,0,0,0.2);
+    transition: opacity 0.3s, transform 0.3s;
+}
+
+.cookie-banner.hidden {
+    opacity: 0;
+    transform: translate(-50%, 150%);
+}
+
+.cookie-banner button {
+    background-color: #10b981;
+    color: white;
+    border: none;
+    border-radius: 0.375rem;
+    padding: 0.5rem 1rem;
+    cursor: pointer;
+    font-weight: 500;
+    transition: background-color 0.2s;
+}
+
+.cookie-banner button:hover {
+    background-color: #059669;
+}
+
+/* --- Terms & Conditions Modal --- */
+.modal-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0, 0, 0, 0.6);
+    backdrop-filter: blur(5px);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 2000;
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity 0.3s, visibility 0.3s;
+}
+
+.modal-overlay.visible {
+    opacity: 1;
+    visibility: visible;
+}
+
+.modal-content {
+    background-color: #1f2937; /* Dark gray */
+    color: #d1d5db;
+    padding: 2rem;
+    border-radius: 0.5rem;
+    max-width: 600px;
+    width: 90%;
+    position: relative;
+    max-height: 80vh;
+    overflow-y: auto;
+    transform: scale(0.95);
+    transition: transform 0.3s;
+}
+
+.modal-overlay.visible .modal-content {
+    transform: scale(1);
+}
+
+.modal-content h2 {
+    margin-top: 0;
+    color: #ffffff;
+}
+
+.modal-content p {
+    line-height: 1.6;
+}
+
+.modal-close-btn {
+    position: absolute;
+    top: 1rem;
+    right: 1rem;
+    background: none;
+    border: none;
+    color: #9ca3af;
+    font-size: 1.75rem;
+    cursor: pointer;
+    transition: color 0.2s, transform 0.2s;
+}
+
+.modal-close-btn:hover {
+    color: #ffffff;
+    transform: rotate(90deg);
+}
+
+
+/* --- Responsive Adjustments --- */
+@media (max-width: 900px) {
+    .chat-display {
+        padding: 1rem;
+    }
+    .chat-input-area {
+        padding: 0.75rem;
+    }
+    .footer-main-content {
+        flex-direction: column;
+        align-items: center;
+        gap: 2.5rem;
+        text-align: center;
+    }
+    .footer-secondary-content {
+        flex-direction: column;
+        gap: 1rem;
+    }
+}
