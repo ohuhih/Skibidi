@@ -88,16 +88,17 @@ document.addEventListener('DOMContentLoaded', () => {
 
         // 1. Encode the user's prompt to get the `src` tensor
         const srcIds = tokenizer.encode(prompt).filter(id => typeof id === 'number');
-        const srcTensor = new ort.Tensor('int64', BigInt64Array.from(srcIds.map(BigInt)), [1, srcIds.length]);
+        // EDITED: Use Int32Array instead of BigInt64Array to fix potential data type mismatch.
+        const srcTensor = new ort.Tensor('int64', Int32Array.from(srcIds), [1, srcIds.length]);
 
         // 2. Initialize the `tgt` tensor with the Beginning-Of-Sentence (BOS) token
-        // EDITED: Use the correct property `cls_token_id` for the BOS token.
         const bosTokenId = tokenizer.cls_token_id || 0;
         let tgtIds = [bosTokenId];
 
         // 3. Autoregressively generate tokens
         for (let i = 0; i < maxGenerationLength; i++) {
-            const tgtTensor = new ort.Tensor('int64', BigInt64Array.from(tgtIds.map(BigInt)), [1, tgtIds.length]);
+            // EDITED: Use Int32Array here as well.
+            const tgtTensor = new ort.Tensor('int64', Int32Array.from(tgtIds), [1, tgtIds.length]);
 
             // Prepare the inputs for the model
             const feeds = { src: srcTensor, tgt: tgtTensor };
@@ -119,7 +120,6 @@ document.addEventListener('DOMContentLoaded', () => {
             }
             
             // Stop if we generate the End-Of-Sentence (EOS) token
-            // EDITED: Use the correct property `sep_token_id` for the EOS token.
             const eosTokenId = tokenizer.sep_token_id || 1;
             if (nextTokenId === eosTokenId) {
                 break;
