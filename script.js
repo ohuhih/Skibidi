@@ -1,13 +1,13 @@
 /*
 ================================================================================
-FINAL CORRECTED SCRIPT (AUGUST 1, 2025)
+FINAL CORRECTED SCRIPT
 ================================================================================
-This version contains the following critical fixes based on the new errors:
-1.  The model is identified as 'distilbert', so the pipeline is set back to
-    the correct task: 'question-answering'.
-2.  The `getChatbotResponse` function is reverted to the question-answering
-    logic, which takes a separate `question` and `context`.
-3.  Ensures the `modelRepoId` points to the Hugging Face Hub to fix 404 errors.
+This version contains the following fixes to solve the "Missing inputs: src, tgt" error:
+
+1.  The pipeline task is set to 'text2text-generation' to match your
+    sequence-to-sequence model's architecture.
+2.  The `getChatbotResponse` function is updated to correctly call a
+    text-generation model with a single prompt and parse its output.
 ================================================================================
 */
 document.addEventListener('DOMContentLoaded', () => {
@@ -18,10 +18,10 @@ document.addEventListener('DOMContentLoaded', () => {
     const clearChatBtn = document.getElementById('clear-chat-btn');
 
     // --- ONNX MODEL SETUP ---
-    let questionAnswerer = null;
+    let modelPipeline = null; // Renamed for clarity
     let isModelReady = false;
 
-    // This context is the knowledge base for the question-answering model.
+    // This context is now used to build a prompt for the text-generation model
     const context = `
         Paggy Xi Xang is a cutting-edge chatbot designed by a talented team.
         The backend was developed by Alex Martinez and Samira Khan, who focused on API design and database architecture.
@@ -37,18 +37,16 @@ document.addEventListener('DOMContentLoaded', () => {
         loadingMessage.classList.add('loading-indicator', 'message-bubble');
         loadingMessage.textContent = 'Initializing AI model...';
         chatDisplay.appendChild(loadingMessage);
-        userInput.disabled = true;
+        userInput.disabled = true; // Disable input while loading
 
         try {
             const { pipeline } = await import('https://cdn.jsdelivr.net/npm/@xenova/transformers@2.17.1');
-            
-            // --- FIX: Ensure this points to Hugging Face, not a local path ---
             const modelRepoId = 'Nayusai/chtbot';
 
             loadingMessage.textContent = 'Loading AI model from Hugging Face...';
             
-            // --- FIX: Use the correct pipeline for a DistilBERT model ---
-            questionAnswerer = await pipeline('question-answering', modelRepoId, {
+            // --- FIX 1: Use the correct pipeline for a text-generation model ---
+            modelPipeline = await pipeline('text2text-generation', modelRepoId, {
                 quantized: false,
                 progress_callback: (progress) => {
                     loadingMessage.textContent = `Loading: ${progress.file} (${Math.round(progress.progress)}%)`;
@@ -62,13 +60,13 @@ document.addEventListener('DOMContentLoaded', () => {
             chatDisplay.appendChild(readyMessage);
             
             isModelReady = true;
-            userInput.disabled = false;
+            userInput.disabled = false; // Re-enable input
             userInput.focus();
 
         } catch (error) {
             console.error('Failed to initialize the AI model:', error);
-            loadingMessage.textContent = 'Error: Could not load model. Check console for details.';
-            loadingMessage.style.backgroundColor = '#f87171';
+            loadingMessage.textContent = 'Error: Could not load model. Check console & file paths.';
+            loadingMessage.style.backgroundColor = '#f87171'; // Red color for error
             loadingMessage.style.color = '#7f1d1d';
         }
     }
@@ -76,7 +74,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // --- Main function to run the model ---
     async function getChatbotResponse(userQuestion) {
         if (!isModelReady) {
-            appendMessage("The AI model is still initializing, please wait.", 'chatbot');
+            appendMessage("The AI model is still initializing, please wait a moment.", 'chatbot');
             return;
         }
 
@@ -87,14 +85,18 @@ document.addEventListener('DOMContentLoaded', () => {
         chatDisplay.scrollTop = chatDisplay.scrollHeight;
 
         try {
-            // --- FIX: Call the pipeline correctly for question-answering ---
-            const result = await questionAnswerer(userQuestion, context);
+            // --- FIX 2: Call the model correctly for text generation ---
+            // Combine the context and question into a single prompt string.
+            const prompt = `Based on the following context, answer the question.\n\nContext: "${context.trim()}"\n\nQuestion: "${userQuestion}"\n\nAnswer:`;
+
+            // Call the text-generation pipeline with the prompt.
+            const result = await modelPipeline(prompt, {
+                max_new_tokens: 100, // You can adjust the max length of the response
+                skip_special_tokens: true,
+            });
             
-            let chatbotReply = "Sorry, I couldn't find an answer in my knowledge base.";
-            // Check if the model is confident enough and found an answer
-            if (result && result.score > 0.3 && result.answer) {
-                chatbotReply = result.answer;
-            }
+            // The output is an array; the text is in the 'generated_text' property.
+            const chatbotReply = result[0]?.generated_text.trim() || "Sorry, I couldn't generate a response.";
             
             chatDisplay.removeChild(loadingMessage);
             appendMessage(chatbotReply, 'chatbot');
@@ -169,6 +171,7 @@ document.addEventListener('DOMContentLoaded', () => {
         messagesToRemove.forEach(msg => {
             msg.remove();
         });
+        // Optional: add back a ready message after clearing
         const readyMessage = document.createElement('div');
         readyMessage.classList.add('initial-message');
         readyMessage.textContent = 'Chat cleared. Ask me something!';
