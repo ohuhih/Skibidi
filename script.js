@@ -2,14 +2,9 @@
 ================================================================================
 FINAL WORKING VERSION
 ================================================================================
-This version is designed to work by loading all model files from your public
-Hugging Face Hub repository. This is the standard and most reliable method,
-and it will resolve the CORS and file-not-found errors.
-
-**Your Action Required:**
-- You have already completed the required action by uploading your files to
-  the 'Nayusai/chtbot' repository on Hugging Face. This script will now
-  load everything from there.
+This version is designed to work with your specific `src`/`tgt` model. It
+manually loads all necessary files from their exact URLs and uses the correct
+autoregressive generation loop for your model's architecture.
 ================================================================================
 */
 document.addEventListener('DOMContentLoaded', () => {
@@ -20,7 +15,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const clearChatBtn = document.getElementById('clear-chat-btn');
 
     // --- MODEL AND TOKENIZER SETUP ---
-    let generator = null; // Changed to a more generic name
+    let session = null;
+    let tokenizer = null;
     let isModelReady = false;
     const maxGenerationLength = 50; // Max number of tokens to generate
 
@@ -34,23 +30,27 @@ document.addEventListener('DOMContentLoaded', () => {
         sendButton.disabled = true;
 
         try {
-            // Using a specific, known-stable version of the all-in-one library
-            const { pipeline } = await import('https://cdn.jsdelivr.net/npm/@xenova/transformers@2.17.1');
+            // EDITED: Import the AutoTokenizer for a more robust loading process.
+            const { AutoTokenizer } = await import('https://cdn.jsdelivr.net/npm/@xenova/transformers@2.17.1');
             
-            // =================================================================
-            // === CORRECTED: This now points to your Hugging Face repo ID ===
-            // =================================================================
-            // The library will automatically find all necessary files in this repo.
-            const modelRepoId = 'Nayusai/chtbot';
+            // Define the exact URLs for all necessary files.
+            const modelUrl = 'https://huggingface.co/Nayusai/chtbot/resolve/main/onnx/model.onnx';
+            // This is the base path to the folder containing your tokenizer files.
+            const tokenizerPath = 'https://huggingface.co/Nayusai/chtbot/raw/main/';
 
-            loadingMessage.textContent = 'Loading AI model from Hugging Face...';
-            // This is the simplest and most reliable way to load the model.
-            // Using 'text2text-generation' as it's more suitable for a src/tgt model.
-            generator = await pipeline('text2text-generation', modelRepoId, {
-                quantized: true,
-                progress_callback: (progress) => {
-                    loadingMessage.textContent = `Loading: ${progress.file} (${Math.round(progress.progress)}%)`;
-                }
+            loadingMessage.textContent = 'Loading tokenizer...';
+            // EDITED: Use AutoTokenizer.from_pretrained to correctly load the tokenizer
+            // from your configuration files. This is the fix for the '[UNK]' token issue.
+            tokenizer = await AutoTokenizer.from_pretrained(tokenizerPath);
+            
+            // Configure the ONNX runtime
+            ort.env.wasm.wasmPaths = 'https://cdn.jsdelivr.net/npm/onnxruntime-web@1.17.1/dist/';
+            ort.env.wasm.numThreads = 1;
+
+            loadingMessage.textContent = 'Loading model...';
+            session = await ort.InferenceSession.create(modelUrl, {
+                executionProviders: ['wasm'],
+                graphOptimizationLevel: 'all'
             });
 
             chatDisplay.removeChild(loadingMessage);
@@ -66,12 +66,91 @@ document.addEventListener('DOMContentLoaded', () => {
 
         } catch (error) {
             console.error('Failed to initialize the AI model:', error);
-            loadingMessage.textContent = 'Error: Could not load model. Check console & file paths.';
+            loadingMessage.textContent = 'Error: Could not load the AI model.';
             loadingMessage.style.color = '#f87171'; // Red color for error
         }
     }
     
-    // --- This is the main function that now runs the ONNX model ---
+    // --- Autoregressive Generation for src/tgt models ---
+    async function generateText(prompt) {
+        if (!tokenizer || !session) {
+            throw new Error("Tokenizer or session not initialized.");
+        }
+
+        // 1. Encode the user's prompt to get the `src` tensor
+        const srcIds = tokenizer.encode(prompt);
+        const srcTensor = new ort.Tensor('int64', BigInt64Array.from(srcIds.map(BigInt)), [1, srcIds.length]);
+
+        // 2. Initialize the `tgt` tensor with the Beginning-Of-Sentence (BOS) token
+        const bosTokenId = tokenizer.cls_token_id || 0;
+        let tgtIds = [bosTokenId];
+        
+        // This will store the model's attention cache (past key values)
+        let pastKeyValues = null;
+
+        // 3. Autoregressively generate tokens
+        for (let i = 0; i < maxGenerationLength; i++) {
+            let feeds;
+            let currentTgtIds;
+
+            // On the first step, the target sequence is just the BOS token.
+            // On subsequent steps, it's only the *last* generated token.
+            if (i === 0) {
+                currentTgtIds = tgtIds;
+            } else {
+                currentTgtIds = [tgtIds[tgtIds.length - 1]];
+            }
+
+            const tgtTensor = new ort.Tensor('int64', BigInt64Array.from(currentTgtIds.map(BigInt)), [1, currentTgtIds.length]);
+
+            // On the first step, we provide `src`. On later steps, we provide the attention cache.
+            if (i === 0) {
+                feeds = { src: srcTensor, tgt: tgtTensor };
+            } else {
+                feeds = { src: srcTensor, tgt: tgtTensor, ...pastKeyValues };
+            }
+            
+            const results = await session.run(feeds);
+            const logits = results.output.data;
+
+            // Get the logits for the very last generated token
+            const vocabSize = results.output.dims[2];
+            const lastTokenLogits = logits.slice((currentTgtIds.length - 1) * vocabSize, currentTgtIds.length * vocabSize);
+
+            // Sample the next token ID (greedy search)
+            let maxLogit = -Infinity;
+            let nextTokenId = 0;
+            for (let j = 0; j < vocabSize; j++) {
+                if (lastTokenLogits[j] > maxLogit) {
+                    maxLogit = lastTokenLogits[j];
+                    nextTokenId = j;
+                }
+            }
+            
+            // Stop if we generate the End-Of-Sentence (EOS) token
+            const eosTokenId = tokenizer.sep_token_id || 1;
+            if (nextTokenId === eosTokenId) {
+                break;
+            }
+
+            // Add the new token to our generated sequence
+            tgtIds.push(nextTokenId);
+            
+            // Update the attention cache for the next iteration
+            pastKeyValues = {};
+            for (const key in results) {
+                if (key.startsWith('present')) {
+                    pastKeyValues[key.replace('present', 'past_key_values')] = results[key];
+                }
+            }
+        }
+
+        // 4. Decode the generated tokens, skipping the initial BOS token
+        return tokenizer.decode(tgtIds.slice(1));
+    }
+
+
+    // This is the main function that now runs the ONNX model.
     async function getChatbotResponse(userQuestion) {
         if (!isModelReady) {
             appendMessage("The AI model is still initializing, please wait a moment.", 'chatbot');
@@ -85,13 +164,7 @@ document.addEventListener('DOMContentLoaded', () => {
         chatDisplay.scrollTop = chatDisplay.scrollHeight;
 
         try {
-            // The pipeline now handles the complex generation loop internally.
-            const result = await generator(userQuestion, {
-                max_length: maxGenerationLength,
-                no_repeat_ngram_size: 3,
-            });
-            const reply = result[0].generated_text;
-
+            const reply = await generateText(userQuestion);
             chatDisplay.removeChild(loadingMessage);
             appendMessage(reply || "...", 'chatbot');
 
