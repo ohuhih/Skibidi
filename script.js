@@ -22,11 +22,11 @@ document.addEventListener('DOMContentLoaded', () => {
             const { pipeline } = await import('https://cdn.jsdelivr.net/npm/@xenova/transformers@2.17.1');
 
             // Replace with your Hugging Face repo ID that contains a generative model
-            const modelRepoId = 'ohuhih/Skibidi';
+            const modelRepoId = 'Nayusai/chtbot';
 
             loadingMessage.textContent = 'Loading AI model from Hugging Face...';
             chatGenerator = await pipeline('text2text-generation', modelRepoId, {
-                quantized: true,
+                quantized: false,
                 progress_callback: (progress) => {
                     loadingMessage.textContent = `Loading: ${progress.file} (${Math.round(progress.progress)}%)`;
                 }
@@ -207,3 +207,4 @@ document.addEventListener('DOMContentLoaded', () => {
     // --- Initialize the model when the page loads ---
     initializeModel();
 });
+
