@@ -2,16 +2,14 @@
 ================================================================================
 FINAL WORKING VERSION
 ================================================================================
-This version is designed to work by loading all model files from a public
+This version is designed to work by loading all model files from your public
 Hugging Face Hub repository. This is the standard and most reliable method,
 and it will resolve the CORS and file-not-found errors.
 
 **Your Action Required:**
-1. Create a public model repository on Hugging Face.
-2. Upload your `transformer_chatbot.onnx`, `config.json`, `tokenizer.json`,
-   and `tokenizer_config.json` files to that repository.
-3. Replace the placeholder 'YourUsername/YourRepoName' below with your actual
-   Hugging Face repository ID.
+- You have already completed the required action by uploading your files to
+  the 'ohuhih/Skibidi' repository on Hugging Face. This script will now
+  load everything from there.
 ================================================================================
 */
 document.addEventListener('DOMContentLoaded', () => {
@@ -47,9 +45,9 @@ document.addEventListener('DOMContentLoaded', () => {
             const { pipeline } = await import('https://cdn.jsdelivr.net/npm/@xenova/transformers@2.17.1');
             
             // =================================================================
-            // === IMPORTANT: REPLACE THIS WITH YOUR HUGGING FACE REPO ID ===
+            // === CORRECTED: This now points to your Hugging Face repo ID ===
             // =================================================================
-            const modelRepoId = 'Nayusai/chtbot'; // Example: 'YourUsername/YourRepoName'
+            const modelRepoId = 'ohuhih/Skibidi';
 
             loadingMessage.textContent = 'Loading AI model from Hugging Face...';
             // This is the simplest and most reliable way to load the model.
