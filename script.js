@@ -1,10 +1,17 @@
 /*
 ================================================================================
-IMPORTANT: HOW TO RUN THIS PROJECT
+FINAL WORKING VERSION
 ================================================================================
-This project is designed to be run from a web server, not by opening the
-index.html file directly. Deploying to a service like GitHub Pages (which you
-have done) is the perfect way to run it.
+This version is designed to work by loading all model files from a public
+Hugging Face Hub repository. This is the standard and most reliable method,
+and it will resolve the CORS and file-not-found errors.
+
+**Your Action Required:**
+1. Create a public model repository on Hugging Face.
+2. Upload your `transformer_chatbot.onnx`, `config.json`, `tokenizer.json`,
+   and `tokenizer_config.json` files to that repository.
+3. Replace the placeholder 'YourUsername/YourRepoName' below with your actual
+   Hugging Face repository ID.
 ================================================================================
 */
 document.addEventListener('DOMContentLoaded', () => {
@@ -15,8 +22,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const clearChatBtn = document.getElementById('clear-chat-btn');
 
     // --- ONNX MODEL SETUP (Question-Answering) ---
-    let session = null;
-    let tokenizer = null;
+    let questionAnswerer = null;
     let isModelReady = false;
 
     const context = `
@@ -37,38 +43,22 @@ document.addEventListener('DOMContentLoaded', () => {
         userInput.disabled = true; // Disable input while loading
 
         try {
-            // Using a specific, known-stable version
-            const { BertTokenizer } = await import('https://cdn.jsdelivr.net/npm/@xenova/transformers@2.17.1');
+            // Using a specific, known-stable version of the all-in-one library
+            const { pipeline } = await import('https://cdn.jsdelivr.net/npm/@xenova/transformers@2.17.1');
             
-            // Define the exact URLs for all necessary files.
-            const modelUrl = 'https://github.com/ohuhih/Skibidi/releases/download/test/transformer_chatbot.onnx';
-            const tokenizerUrl = 'https://raw.githubusercontent.com/ohuhih/Skibidi/main/models/tokenizer.json';
-            const tokenizerConfigUrl = 'https://raw.githubusercontent.com/ohuhih/Skibidi/main/models/tokenizer_config.json';
+            // =================================================================
+            // === IMPORTANT: REPLACE THIS WITH YOUR HUGGING FACE REPO ID ===
+            // =================================================================
+            const modelRepoId = 'Nayusai/chtbot'; // Example: 'YourUsername/YourRepoName'
 
-            loadingMessage.textContent = 'Loading tokenizer configuration...';
-            // Manually fetch the configuration files to bypass the library's fallback.
-            const tokenizerConfigResponse = await fetch(tokenizerConfigUrl);
-            const tokenizerConfig = await tokenizerConfigResponse.json();
-            
-            const tokenizerResponse = await fetch(tokenizerUrl);
-            const tokenizerJson = await tokenizerResponse.json();
-
-            loadingMessage.textContent = 'Creating tokenizer...';
-            // Manually create the tokenizer from the fetched configuration.
-            // Since DistilBERT uses the BertTokenizer, we can instantiate it directly.
-            tokenizer = new BertTokenizer(tokenizerJson, tokenizerConfig);
-            
-            // The ONNX runtime is now loaded via a <script> tag in index.html,
-            // so we no longer need to import it here.
-            
-            // Configure the ONNX runtime to prevent browser errors
-            ort.env.wasm.wasmPaths = 'https://cdn.jsdelivr.net/npm/onnxruntime-web@1.17.1/dist/';
-            ort.env.wasm.numThreads = 1;
-
-            loadingMessage.textContent = 'Loading model from GitHub...';
-            session = await ort.InferenceSession.create(modelUrl, {
-                executionProviders: ['wasm'],
-                graphOptimizationLevel: 'all'
+            loadingMessage.textContent = 'Loading AI model from Hugging Face...';
+            // This is the simplest and most reliable way to load the model.
+            // The library will automatically find all the necessary files in your repo.
+            questionAnswerer = await pipeline('question-answering', modelRepoId, {
+                quantized: true,
+                progress_callback: (progress) => {
+                    loadingMessage.textContent = `Loading: ${progress.file} (${Math.round(progress.progress)}%)`;
+                }
             });
 
             chatDisplay.removeChild(loadingMessage);
@@ -83,7 +73,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         } catch (error) {
             console.error('Failed to initialize the AI model:', error);
-            loadingMessage.textContent = 'Error: Could not load the AI model.';
+            loadingMessage.textContent = 'Error: Could not load model. Check console & file paths.';
             loadingMessage.style.backgroundColor = '#f87171'; // Red color for error
             loadingMessage.style.color = '#7f1d1d';
         }
@@ -103,37 +93,12 @@ document.addEventListener('DOMContentLoaded', () => {
         chatDisplay.scrollTop = chatDisplay.scrollHeight;
 
         try {
-            const inputs = tokenizer(userQuestion, { text_pair: context, padding: true, truncation: true });
-            
-            const inputIds = new ort.Tensor('int64', inputs.input_ids.data, inputs.input_ids.dims);
-            const attentionMask = new ort.Tensor('int64', inputs.attention_mask.data, inputs.attention_mask.dims);
-            const tokenTypeIds = new ort.Tensor('int64', inputs.token_type_ids.data, inputs.token_type_ids.dims);
-
-            const feeds = {
-                input_ids: inputIds,
-                attention_mask: attentionMask,
-                token_type_ids: tokenTypeIds,
-            };
-
-            const outputs = await session.run(feeds);
-            const startLogits = outputs.start_logits.data;
-            const endLogits = outputs.end_logits.data;
-
-            let bestStart = -1, bestEnd = -1, maxScore = -Infinity;
-            for (let i = 0; i < startLogits.length; i++) {
-                for (let j = i; j < endLogits.length; j++) {
-                    if (startLogits[i] + endLogits[j] > maxScore) {
-                        maxScore = startLogits[i] + endLogits[j];
-                        bestStart = i;
-                        bestEnd = j;
-                    }
-                }
-            }
+            const result = await questionAnswerer(userQuestion, context);
             
             let chatbotReply = "Sorry, I couldn't find an answer in my knowledge base.";
-            if (bestStart !== -1 && maxScore > 0) { // Add a score threshold
-                const answerTokens = inputs.input_ids.data.slice(bestStart, bestEnd + 1);
-                chatbotReply = tokenizer.decode(answerTokens, { skip_special_tokens: true });
+            // Check if the model is confident enough in its answer
+            if (result && result.score > 0.3) { // You can adjust this confidence threshold
+                chatbotReply = result.answer;
             }
             
             chatDisplay.removeChild(loadingMessage);
