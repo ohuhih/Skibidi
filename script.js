@@ -1,210 +1,157 @@
-document.addEventListener('DOMContentLoaded', () => {
-    // --- CHATBOT LOGIC ---
-    const chatDisplay = document.getElementById('chat-display');
-    const userInput = document.getElementById('user-input');
-    const sendButton = document.getElementById('send-button');
-    const clearChatBtn = document.getElementById('clear-chat-btn');
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>ONNX Generative Chatbot</title>
+<style>
+  body { font-family: Arial, sans-serif; max-width: 600px; margin: 2em auto; }
+  #chat-display { border: 1px solid #ccc; padding: 1em; height: 400px; overflow-y: auto; margin-bottom: 1em; }
+  .message-wrapper { margin-bottom: 1em; }
+  .user-wrapper .message-bubble { background-color: #d1e7ff; color: #003366; text-align: right; padding: 0.5em 1em; border-radius: 12px; display: inline-block; }
+  .chatbot-wrapper .message-bubble { background-color: #eee; color: #222; padding: 0.5em 1em; border-radius: 12px; display: inline-block; }
+  #user-input { width: 80%; padding: 0.5em; }
+  #send-button { padding: 0.5em 1em; }
+</style>
+</head>
+<body>
 
-    // --- ONNX MODEL SETUP (Text2Text Generation) ---
-    let chatGenerator = null;
-    let isModelReady = false;
+<div id="chat-display"></div>
+<input type="text" id="user-input" placeholder="Type your message..." />
+<button id="send-button">Send</button>
 
-    // --- New function to initialize the model on page load ---
-    async function initializeModel() {
-        const loadingMessage = document.createElement('div');
-        loadingMessage.classList.add('loading-indicator', 'message-bubble');
-        loadingMessage.textContent = 'Initializing AI model...';
-        chatDisplay.appendChild(loadingMessage);
-        userInput.disabled = true; // Disable input while loading
+<script src="https://cdn.jsdelivr.net/npm/onnxruntime-web/dist/ort.min.js"></script>
+<script type="module">
+// Import Hugging Face Tokenizers (must be served from your server or use unpkg if available)
+import { Tokenizer } from 'https://cdn.jsdelivr.net/npm/@huggingface/tokenizers@0.13.4/dist/tokenizers.esm.min.js';
 
-        try {
-            // Load the transformers pipeline from the CDN
-            const { pipeline } = await import('https://cdn.jsdelivr.net/npm/@xenova/transformers@2.17.1');
+const modelUrl = 'https://huggingface.co/Nayusai/chtbot/blob/main/onnx/model.onnx';
+const tokenizerUrl = 'https://huggingface.co/Nayusai/chtbot/blob/main/tokenizer.json';
 
-            // Replace with your Hugging Face repo ID that contains a generative model
-            const modelRepoId = 'Nayusai/chtbot';
+let session = null;
+let tokenizer = null;
+const maxGenerationLength = 50;
+const EOS_TOKEN = ''; // Change if your tokenizer uses different EOS token
 
-            loadingMessage.textContent = 'Loading AI model from Hugging Face...';
-            chatGenerator = await pipeline('text2text-generation', modelRepoId, {
-                quantized: false,
-                progress_callback: (progress) => {
-                    loadingMessage.textContent = `Loading: ${progress.file} (${Math.round(progress.progress)}%)`;
-                }
-            });
+// Load ONNX model
+async function loadModel() {
+  session = await ort.InferenceSession.create(modelUrl);
+  console.log('ONNX model loaded');
+}
 
-            chatDisplay.removeChild(loadingMessage);
-            const readyMessage = document.createElement('div');
-            readyMessage.classList.add('initial-message');
-            readyMessage.textContent = 'Model loaded. Start chatting!';
-            chatDisplay.appendChild(readyMessage);
+// Load tokenizer
+async function loadTokenizer() {
+  const response = await fetch(tokenizerUrl);
+  const tokenizerJson = await response.json();
+  tokenizer = await Tokenizer.fromConfig(tokenizerJson);
+  console.log('Tokenizer loaded');
+}
 
-            isModelReady = true;
-            userInput.disabled = false; // Re-enable input
-            userInput.focus();
+// Greedy sampling: pick max logit
+function sampleFromLogits(logits) {
+  let maxIdx = 0;
+  let maxVal = logits[0];
+  for (let i = 1; i < logits.length; i++) {
+    if (logits[i] > maxVal) {
+      maxVal = logits[i];
+      maxIdx = i;
+    }
+  }
+  return maxIdx;
+}
 
-        } catch (error) {
-            console.error('Failed to initialize the AI model:', error);
-            loadingMessage.textContent = 'Error: Could not load model. Check console & file paths.';
-            loadingMessage.style.backgroundColor = '#f87171'; // Red color for error
-            loadingMessage.style.color = '#7f1d1d';
-        }
+// Generate text autoregressively
+async function generateText(prompt) {
+  // Encode input prompt
+  let inputIds = tokenizer.encode(prompt).ids;
+
+  // Start generated tokens with input
+  let generatedIds = [...inputIds];
+
+  for (let step = 0; step < maxGenerationLength; step++) {
+    const inputTensor = new ort.Tensor('int64', Int32Array.from(generatedIds), [1, generatedIds.length]);
+
+    // Run inference
+    const feeds = { input_ids: inputTensor }; // Check your ONNX input name!
+    const results = await session.run(feeds);
+
+    // Get logits from output
+    const logits = results.logits.data; // Check your ONNX output name!
+
+    // Calculate vocab size
+    const vocabSize = logits.length / generatedIds.length;
+    const lastTokenLogits = logits.slice((generatedIds.length - 1) * vocabSize);
+
+    // Sample next token
+    const nextTokenId = sampleFromLogits(lastTokenLogits);
+
+    if (tokenizer.idToToken(nextTokenId) === EOS_TOKEN) {
+      break;
     }
 
-    // The main function that runs the generative model
-    async function getChatbotResponse(userInputText) {
-        if (!isModelReady) {
-            appendMessage("The AI model is still initializing, please wait a moment.", 'chatbot');
-            return;
-        }
+    generatedIds.push(nextTokenId);
+  }
 
-        const loadingMessage = document.createElement('div');
-        loadingMessage.classList.add('loading-indicator', 'message-bubble');
-        loadingMessage.textContent = 'Generating response...';
-        chatDisplay.appendChild(loadingMessage);
-        chatDisplay.scrollTop = chatDisplay.scrollHeight;
+  // Decode generated tokens except prompt
+  const outputIds = generatedIds.slice(inputIds.length);
+  return tokenizer.decode(outputIds);
+}
 
-        try {
-            // Run generation with your input text
-            const results = await chatGenerator(userInputText);
+// Chat UI helpers
+const chatDisplay = document.getElementById('chat-display');
+const userInput = document.getElementById('user-input');
+const sendButton = document.getElementById('send-button');
 
-            // The pipeline returns an array of results; take first generated_text
-            const chatbotReply = (results && results[0] && results[0].generated_text) || "Sorry, I couldn't generate a response.";
+function appendMessage(text, sender) {
+  const wrapper = document.createElement('div');
+  wrapper.className = sender + '-wrapper message-wrapper';
 
-            chatDisplay.removeChild(loadingMessage);
-            appendMessage(chatbotReply, 'chatbot');
+  const bubble = document.createElement('div');
+  bubble.className = sender + '-message message-bubble';
+  bubble.textContent = text;
 
-        } catch (error) {
-            if (loadingMessage.parentNode === chatDisplay) {
-                chatDisplay.removeChild(loadingMessage);
-            }
-            console.error('Error running the chatbot model:', error);
-            appendMessage('Error: Could not run the model. Please check the console.', 'chatbot');
-        }
-    }
+  wrapper.appendChild(bubble);
+  chatDisplay.appendChild(wrapper);
+  chatDisplay.scrollTop = chatDisplay.scrollHeight;
+}
 
-    // --- EXISTING HELPER FUNCTIONS ---
+async function sendMessage() {
+  const text = userInput.value.trim();
+  if (!text) return;
 
-    function appendMessage(text, sender) {
-        const messageWrapper = document.createElement('div');
-        messageWrapper.classList.add('message-wrapper', `${sender}-wrapper`);
+  appendMessage(text, 'user');
+  userInput.value = '';
+  userInput.disabled = true;
+  sendButton.disabled = true;
 
-        const messageElement = document.createElement('div');
-        messageElement.classList.add('message-bubble', `${sender}-message`);
-        messageElement.textContent = text;
+  try {
+    const reply = await generateText(text);
+    appendMessage(reply, 'chatbot');
+  } catch (e) {
+    console.error('Generation error:', e);
+    appendMessage('Sorry, something went wrong.', 'chatbot');
+  } finally {
+    userInput.disabled = false;
+    sendButton.disabled = false;
+    userInput.focus();
+  }
+}
 
-        const timestamp = document.createElement('span');
-        timestamp.classList.add('timestamp');
-        const now = new Date();
-        const timeString = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-        timestamp.textContent = timeString;
-
-        const copyBtn = document.createElement('button');
-        copyBtn.classList.add('copy-btn');
-        copyBtn.innerHTML = '<i class="far fa-copy"></i>';
-        copyBtn.title = 'Copy message';
-
-        copyBtn.addEventListener('click', () => {
-            const textToCopy = messageElement.textContent;
-            const textArea = document.createElement('textarea');
-            textArea.value = textToCopy;
-            document.body.appendChild(textArea);
-            textArea.select();
-            try {
-                document.execCommand('copy');
-                copyBtn.innerHTML = '<i class="fas fa-check"></i>';
-                setTimeout(() => {
-                    copyBtn.innerHTML = '<i class="far fa-copy"></i>';
-                }, 1500);
-            } catch (err) {
-                console.error('Failed to copy text: ', err);
-            }
-            document.body.removeChild(textArea);
-        });
-
-        messageWrapper.appendChild(messageElement);
-        messageWrapper.appendChild(copyBtn);
-        messageWrapper.appendChild(timestamp);
-
-        chatDisplay.appendChild(messageWrapper);
-        chatDisplay.scrollTop = chatDisplay.scrollHeight;
-    }
-
-    function sendMessage() {
-        const message = userInput.value.trim();
-        if (message === '') return;
-
-        appendMessage(message, 'user');
-        userInput.value = '';
-        getChatbotResponse(message);
-    }
-
-    sendButton.addEventListener('click', sendMessage);
-    userInput.addEventListener('keypress', (e) => {
-        if (e.key === 'Enter') {
-            sendMessage();
-        }
-    });
-
-    clearChatBtn.addEventListener('click', () => {
-        const messagesToRemove = chatDisplay.querySelectorAll('.message-wrapper, .loading-indicator, .initial-message');
-        messagesToRemove.forEach(msg => {
-            if (!msg.classList.contains('initial-message')) {
-                msg.remove();
-            }
-        });
-    });
-
-    // --- MODAL AND BANNER LOGIC ---
-
-    const cookieBanner = document.getElementById('cookie-banner');
-    const cookieDismissBtn = document.getElementById('cookie-dismiss-btn');
-
-    if (cookieBanner && cookieDismissBtn) {
-        cookieDismissBtn.addEventListener('click', () => {
-            cookieBanner.classList.add('hidden');
-        });
-    }
-
-    const termsModal = document.getElementById('terms-modal');
-    const openTermsLink = document.getElementById('open-terms-link');
-    const closeTermsBtn = document.getElementById('close-terms-btn');
-
-    if (termsModal && openTermsLink && closeTermsBtn) {
-        termsModal.classList.add('visible');
-        openTermsLink.addEventListener('click', (e) => {
-            e.preventDefault();
-            termsModal.classList.add('visible');
-        });
-        closeTermsBtn.addEventListener('click', () => {
-            termsModal.classList.remove('visible');
-        });
-        termsModal.addEventListener('click', (e) => {
-            if (e.target === termsModal) {
-                termsModal.classList.remove('visible');
-            }
-        });
-    }
-
-    const privacyModal = document.getElementById('privacy-modal');
-    const openPrivacyLink = document.getElementById('open-privacy-link');
-    const closePrivacyBtn = document.getElementById('close-privacy-btn');
-
-    if (privacyModal && openPrivacyLink && closePrivacyBtn) {
-        openPrivacyLink.addEventListener('click', (e) => {
-            e.preventDefault();
-            privacyModal.classList.add('visible');
-        });
-        closePrivacyBtn.addEventListener('click', () => {
-            privacyModal.classList.remove('visible');
-        });
-        privacyModal.addEventListener('click', (e) => {
-            if (e.target === privacyModal) {
-                privacyModal.classList.remove('visible');
-            }
-        });
-    }
-
-    // --- Initialize the model when the page loads ---
-    initializeModel();
+sendButton.addEventListener('click', sendMessage);
+userInput.addEventListener('keypress', e => {
+  if (e.key === 'Enter') sendMessage();
 });
 
+// Initialization
+(async () => {
+  appendMessage('Loading model and tokenizer...', 'chatbot');
+  await loadTokenizer();
+  await loadModel();
+  appendMessage('Model ready! You can start chatting.', 'chatbot');
+  userInput.disabled = false;
+  userInput.focus();
+})();
+</script>
+
+</body>
+</html>
