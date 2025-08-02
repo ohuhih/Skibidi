@@ -55,7 +55,10 @@ document.addEventListener('DOMContentLoaded', () => {
                 quantized: true, // Use a smaller, faster version of the model
                 progress_callback: (progress) => {
                     loadingMessage.textContent = `Loading: ${progress.file} (${Math.round(progress.progress)}%)`;
-                }
+                },
+                // EDITED: This forces the library to download files from the internet
+                // instead of trying to find them locally, which fixes the 404 errors.
+                local_files_only: false 
             });
 
             chatDisplay.removeChild(loadingMessage);
