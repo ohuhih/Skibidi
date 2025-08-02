@@ -41,7 +41,7 @@ document.addEventListener('DOMContentLoaded', () => {
             ort.env.wasm.numThreads = 1;
             ort.env.wasm.simd = false;
 
-            await ort.env.initialize();
+            // Removed ort.env.initialize()
 
             loadingMessage.textContent = 'Loading model...';
             try {
