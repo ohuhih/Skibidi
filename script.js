@@ -2,9 +2,9 @@
 ================================================================================
 FINAL WORKING VERSION
 ================================================================================
-This version is designed to work with your specific `src`/`tgt` model that
-does not have a key-value cache. It uses the correct autoregressive generation
-loop for this architecture.
+This version includes the fix for the ONNX Runtime memory allocation error by
+setting `enableMemPattern: false` during session creation. This script is
+tailored to your specific model architecture.
 ================================================================================
 */
 document.addEventListener('DOMContentLoaded', () => {
@@ -59,7 +59,9 @@ document.addEventListener('DOMContentLoaded', () => {
             loadingMessage.textContent = 'Loading model...';
             session = await ort.InferenceSession.create(modelUrl, {
                 executionProviders: ['wasm'],
-                graphOptimizationLevel: 'all'
+                graphOptimizationLevel: 'all',
+                // This line is added to fix the dynamic shape memory error
+                enableMemPattern: false 
             });
 
             chatDisplay.removeChild(loadingMessage);
@@ -80,7 +82,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
     
-    // --- CORRECTED: Autoregressive Generation for a model WITHOUT a key-value cache ---
+    // --- Autoregressive Generation for a model WITHOUT a key-value cache ---
     async function generateText(prompt) {
         if (!tokenizer || !session) {
             throw new Error("Tokenizer or session not initialized.");
