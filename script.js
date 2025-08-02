@@ -1,12 +1,12 @@
 /*
 ================================================================================
-DEFINITIVE SCRIPT FOR 'distilbert' MODEL (FRIDAY, AUGUST 1, 2025)
+FINAL SCRIPT (FOR ONNX-ONLY WITH COMPATIBLE CONFIG)
 ================================================================================
-This script is configured for your 'distilbert' model. It fixes all errors:
-1.  The pipeline is correctly set to 'question-answering'.
-2.  The model is called with a separate `question` and `context`.
-3.  The `modelRepoId` correctly points to the Hugging Face Hub, fixing 404 errors.
-================================================================================
+This script is designed to work with your existing .onnx file by pairing it
+with a generic text-generation (T5-style) config.json and tokenizer.json
+in your Hugging Face repository.
+
+This will solve the loading and execution errors.
 */
 document.addEventListener('DOMContentLoaded', () => {
     // --- CHATBOT LOGIC ---
@@ -16,10 +16,11 @@ document.addEventListener('DOMContentLoaded', () => {
     const clearChatBtn = document.getElementById('clear-chat-btn');
 
     // --- ONNX MODEL SETUP ---
-    let questionAnswerer = null;
+    let modelPipeline = null;
     let isModelReady = false;
 
-    // This context is the knowledge base for the question-answering model.
+    // This context is now used to build a prompt for the text-generation model
+    // You can remove or simplify this if your model doesn't need external context.
     const context = `
         Paggy Xi Xang is a cutting-edge chatbot designed by a talented team.
         The backend was developed by Alex Martinez and Samira Khan, who focused on API design and database architecture.
@@ -35,19 +36,17 @@ document.addEventListener('DOMContentLoaded', () => {
         loadingMessage.classList.add('loading-indicator', 'message-bubble');
         loadingMessage.textContent = 'Initializing AI model...';
         chatDisplay.appendChild(loadingMessage);
-        userInput.disabled = true;
+        userInput.disabled = true; // Disable input while loading
 
         try {
             const { pipeline } = await import('https://cdn.jsdelivr.net/npm/@xenova/transformers@2.17.1');
-            
-            // This MUST point to your Hugging Face repository ID.
             const modelRepoId = 'Nayusai/chtbot';
 
             loadingMessage.textContent = 'Loading AI model from Hugging Face...';
             
-            // Use the 'question-answering' pipeline for a DistilBERT model.
-            questionAnswerer = await pipeline('question-answering', modelRepoId, {
-                quantized: false,
+            // Use the 'text2text-generation' pipeline, which will work with your new T5-style config
+            modelPipeline = await pipeline('text2text-generation', modelRepoId, {
+                quantized: false, 
                 progress_callback: (progress) => {
                     loadingMessage.textContent = `Loading: ${progress.file} (${Math.round(progress.progress)}%)`;
                 }
@@ -60,13 +59,13 @@ document.addEventListener('DOMContentLoaded', () => {
             chatDisplay.appendChild(readyMessage);
             
             isModelReady = true;
-            userInput.disabled = false;
+            userInput.disabled = false; // Re-enable input
             userInput.focus();
 
         } catch (error) {
             console.error('Failed to initialize the AI model:', error);
-            loadingMessage.textContent = 'Error: Could not load model. Check console for details.';
-            loadingMessage.style.backgroundColor = '#f87171';
+            loadingMessage.textContent = 'Error: Could not load model. Check console & file paths.';
+            loadingMessage.style.backgroundColor = '#f87171'; // Red color for error
             loadingMessage.style.color = '#7f1d1d';
         }
     }
@@ -74,7 +73,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // --- Main function to run the model ---
     async function getChatbotResponse(userQuestion) {
         if (!isModelReady) {
-            appendMessage("The AI model is still initializing, please wait.", 'chatbot');
+            appendMessage("The AI model is still initializing, please wait a moment.", 'chatbot');
             return;
         }
 
@@ -85,14 +84,17 @@ document.addEventListener('DOMContentLoaded', () => {
         chatDisplay.scrollTop = chatDisplay.scrollHeight;
 
         try {
-            // Call the pipeline with the question and the context.
-            const result = await questionAnswerer(userQuestion, context);
+            // Create a prompt for the model. You can simplify this if no context is needed.
+            const prompt = `Based on the following context, answer the question.\n\nContext: "${context.trim()}"\n\nQuestion: "${userQuestion}"\n\nAnswer:`;
+
+            // Call the text-generation pipeline with the prompt.
+            const result = await modelPipeline(prompt, {
+                max_new_tokens: 150, // You can adjust the max length of the response
+                skip_special_tokens: true,
+            });
             
-            let chatbotReply = "Sorry, I couldn't find an answer in my knowledge base.";
-            // Check if the model is confident enough and found an answer.
-            if (result && result.score > 0.3 && result.answer) {
-                chatbotReply = result.answer;
-            }
+            // The output is an array; the text is in the 'generated_text' property.
+            const chatbotReply = result[0]?.generated_text.trim() || "Sorry, I couldn't generate a response.";
             
             chatDisplay.removeChild(loadingMessage);
             appendMessage(chatbotReply, 'chatbot');
@@ -106,23 +108,27 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    // --- HELPER & UI FUNCTIONS (No changes needed below) ---
+    // --- HELPER & UI FUNCTIONS ---
 
     function appendMessage(text, sender) {
         const messageWrapper = document.createElement('div');
         messageWrapper.classList.add('message-wrapper', `${sender}-wrapper`);
+
         const messageElement = document.createElement('div');
         messageElement.classList.add('message-bubble', `${sender}-message`);
         messageElement.textContent = text;
+
         const timestamp = document.createElement('span');
         timestamp.classList.add('timestamp');
         const now = new Date();
         const timeString = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
         timestamp.textContent = timeString;
+
         const copyBtn = document.createElement('button');
         copyBtn.classList.add('copy-btn');
         copyBtn.innerHTML = '<i class="far fa-copy"></i>';
         copyBtn.title = 'Copy message';
+
         copyBtn.addEventListener('click', () => {
             navigator.clipboard.writeText(messageElement.textContent).then(() => {
                 copyBtn.innerHTML = '<i class="fas fa-check"></i>';
@@ -133,9 +139,11 @@ document.addEventListener('DOMContentLoaded', () => {
                 console.error('Failed to copy text: ', err);
             });
         });
+
         messageWrapper.appendChild(messageElement);
         messageWrapper.appendChild(copyBtn);
         messageWrapper.appendChild(timestamp);
+
         chatDisplay.appendChild(messageWrapper);
         chatDisplay.scrollTop = chatDisplay.scrollHeight;
     }
@@ -143,6 +151,7 @@ document.addEventListener('DOMContentLoaded', () => {
     function sendMessage() {
         const message = userInput.value.trim();
         if (message === '') return;
+
         appendMessage(message, 'user');
         userInput.value = '';
         getChatbotResponse(message);
@@ -158,12 +167,19 @@ document.addEventListener('DOMContentLoaded', () => {
     clearChatBtn.addEventListener('click', () => {
         const messagesToRemove = chatDisplay.querySelectorAll('.message-wrapper, .loading-indicator, .initial-message');
         messagesToRemove.forEach(msg => {
-            msg.remove();
+            // Re-add the initial message after clearing if you want
+            if (msg.classList.contains('initial-message')) {
+                msg.textContent = 'Chat cleared. Ask me something!';
+            } else {
+                 msg.remove();
+            }
         });
-        const readyMessage = document.createElement('div');
-        readyMessage.classList.add('initial-message');
-        readyMessage.textContent = 'Chat cleared. Ask me something!';
-        chatDisplay.appendChild(readyMessage);
+        if (!chatDisplay.querySelector('.initial-message')) {
+            const readyMessage = document.createElement('div');
+            readyMessage.classList.add('initial-message');
+            readyMessage.textContent = 'Chat cleared. Ask me something!';
+            chatDisplay.appendChild(readyMessage);
+        }
     });
 
     // --- MODAL AND BANNER LOGIC ---
