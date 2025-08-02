@@ -39,14 +39,16 @@ document.addEventListener('DOMContentLoaded', () => {
             // Using a specific, known-stable version of the all-in-one library
             const { pipeline } = await import('https://cdn.jsdelivr.net/npm/@xenova/transformers@2.17.1');
             
-            // EDITED: This now points to the current directory, since you have no folders.
-            // The library will look for config.json, tokenizer.json, etc., in the same
-            // directory as your index.html file.
-            const modelPath = './';
+            // EDITED: Point to the ONNX file in your GitHub Release.
+            const modelUrl = 'https://github.com/ohuhih/Skibidi/releases/download/test/transformer_chatbot.onnx';
+            
+            // EDITED: Point the tokenizer to the local directory where your JSON files are.
+            const tokenizerPath = './';
 
             loadingMessage.textContent = 'Loading AI model...';
-            questionAnswerer = await pipeline('question-answering', modelPath, {
-                quantized: true,
+            // EDITED: Load the model from the URL and the tokenizer from the local path.
+            questionAnswerer = await pipeline('question-answering', modelUrl, { 
+                tokenizer: tokenizerPath,
                 progress_callback: (progress) => {
                     loadingMessage.textContent = `Loading: ${progress.file} (${Math.round(progress.progress)}%)`;
                 }
