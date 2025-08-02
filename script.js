@@ -1,15 +1,13 @@
 /*
 ================================================================================
-FINAL WORKING VERSION
+FINAL WORKING VERSION (WITH QUICK FIX)
 ================================================================================
-This version is designed to work by loading all model files from your public
-Hugging Face Hub repository. This is the standard and most reliable method,
-and it will resolve the CORS and file-not-found errors.
+This version applies the "quick fix" by setting `quantized: false`.
+It will now load the standard `model.onnx` file from your Hugging Face
+repository, avoiding the 404 error for the missing quantized file.
 
-**Your Action Required:**
-- You have already completed the required action by uploading your files to
-  the 'ohuhih/Skibidi' repository on Hugging Face. This script will now
-  load everything from there.
+**Note:** This will result in a larger download and slightly slower
+performance compared to a successfully loaded quantized model.
 ================================================================================
 */
 document.addEventListener('DOMContentLoaded', () => {
@@ -45,15 +43,16 @@ document.addEventListener('DOMContentLoaded', () => {
             const { pipeline } = await import('https://cdn.jsdelivr.net/npm/@xenova/transformers@2.17.1');
             
             // =================================================================
-            // === CORRECTED: This now points to your Hugging Face repo ID ===
+            // === This points to your Hugging Face repo ID ===
             // =================================================================
             const modelRepoId = 'Nayusai/chtbot';
 
             loadingMessage.textContent = 'Loading AI model from Hugging Face...';
+            
             // This is the simplest and most reliable way to load the model.
             // The library will automatically find all the necessary files in your repo.
             questionAnswerer = await pipeline('question-answering', modelRepoId, {
-                quantized: true,
+                quantized: false, // --- QUICK FIX APPLIED --- Set to false to load standard model.
                 progress_callback: (progress) => {
                     loadingMessage.textContent = `Loading: ${progress.file} (${Math.round(progress.progress)}%)`;
                 }
@@ -236,4 +235,3 @@ document.addEventListener('DOMContentLoaded', () => {
     // --- Initialize the model when the page loads ---
     initializeModel();
 });
-
