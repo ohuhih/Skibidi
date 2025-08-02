@@ -47,7 +47,7 @@ document.addEventListener('DOMContentLoaded', () => {
             // =================================================================
             // === CORRECTED: This now points to your Hugging Face repo ID ===
             // =================================================================
-            const modelRepoId = 'ohuhih/Skibidi';
+            const modelRepoId = 'Nayusai/chtbot';
 
             loadingMessage.textContent = 'Loading AI model from Hugging Face...';
             // This is the simplest and most reliable way to load the model.
@@ -236,3 +236,4 @@ document.addEventListener('DOMContentLoaded', () => {
     // --- Initialize the model when the page loads ---
     initializeModel();
 });
+
