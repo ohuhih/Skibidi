@@ -1,10 +1,10 @@
 /*
 ================================================================================
-FINAL WORKING VERSION (with Runtime Configuration)
+FINAL WORKING VERSION (with Library Downgrade)
 ================================================================================
-This version explicitly configures the ONNX Runtime to disable SIMD and
-increase the logging level. This is a robust attempt to solve the underlying
-memory allocation error by changing the execution engine itself.
+This version downgrades the ONNX Runtime library to a known-stable version
+(1.15.0) to address the persistent memory allocation error. This is the most
+fundamental change we can make to the execution environment.
 ================================================================================
 */
 document.addEventListener('DOMContentLoaded', () => {
@@ -53,11 +53,12 @@ document.addEventListener('DOMContentLoaded', () => {
             // Manually create the tokenizer from the fetched configuration.
             tokenizer = new BertTokenizer(tokenizerJson, tokenizerConfig);
             
-            // --- NEW: Configure the ONNX runtime environment before creating the session ---
-            ort.env.logLevel = 'verbose'; // Increase logging for more detailed error messages
-            ort.env.wasm.wasmPaths = 'https://cdn.jsdelivr.net/npm/onnxruntime-web@1.17.1/dist/';
+            // --- UPDATED: Configure and use an older, stable ONNX runtime version ---
+            ort.env.logLevel = 'verbose'; 
+            // Using version 1.15.0
+            ort.env.wasm.wasmPaths = 'https://cdn.jsdelivr.net/npm/onnxruntime-web@1.15.0/dist/';
             ort.env.wasm.numThreads = 1;
-            ort.env.wasm.simd = false; // Disable SIMD as a stability measure
+            ort.env.wasm.simd = false; 
             
             loadingMessage.textContent = 'Loading model...';
             session = await ort.InferenceSession.create(modelUrl, {
