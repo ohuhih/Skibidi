@@ -30,18 +30,27 @@ document.addEventListener('DOMContentLoaded', () => {
         sendButton.disabled = true;
 
         try {
-            // EDITED: Import the AutoTokenizer for a more robust loading process.
-            const { AutoTokenizer } = await import('https://cdn.jsdelivr.net/npm/@xenova/transformers@2.17.1');
+            // Using a specific, known-stable version of the transformers library
+            const { BertTokenizer } = await import('https://cdn.jsdelivr.net/npm/@xenova/transformers@2.17.1');
             
             // Define the exact URLs for all necessary files.
             const modelUrl = 'https://huggingface.co/Nayusai/chtbot/resolve/main/onnx/model.onnx';
-            // This is the base path to the folder containing your tokenizer files.
-            const tokenizerPath = 'https://huggingface.co/Nayusai/chtbot/raw/main/';
+            const tokenizerUrl = 'https://huggingface.co/Nayusai/chtbot/raw/main/tokenizer.json';
+            const tokenizerConfigUrl = 'https://huggingface.co/Nayusai/chtbot/raw/main/tokenizer_config.json';
 
-            loadingMessage.textContent = 'Loading tokenizer...';
-            // EDITED: Use AutoTokenizer.from_pretrained to correctly load the tokenizer
-            // from your configuration files. This is the fix for the '[UNK]' token issue.
-            tokenizer = await AutoTokenizer.from_pretrained(tokenizerPath);
+            loadingMessage.textContent = 'Loading tokenizer configuration...';
+            // Manually fetch the configuration files to bypass the library's fallback.
+            const tokenizerConfigResponse = await fetch(tokenizerConfigUrl);
+            if (!tokenizerConfigResponse.ok) throw new Error(`Failed to fetch tokenizer config: ${tokenizerConfigResponse.statusText}`);
+            const tokenizerConfig = await tokenizerConfigResponse.json();
+            
+            const tokenizerResponse = await fetch(tokenizerUrl);
+            if (!tokenizerResponse.ok) throw new Error(`Failed to fetch tokenizer: ${tokenizerResponse.statusText}`);
+            const tokenizerJson = await tokenizerResponse.json();
+
+            loadingMessage.textContent = 'Creating tokenizer...';
+            // Manually create the tokenizer from the fetched configuration.
+            tokenizer = new BertTokenizer(tokenizerJson, tokenizerConfig);
             
             // Configure the ONNX runtime
             ort.env.wasm.wasmPaths = 'https://cdn.jsdelivr.net/npm/onnxruntime-web@1.17.1/dist/';
@@ -71,21 +80,21 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
     
-    // --- Autoregressive Generation for src/tgt models ---
+    // --- CORRECTED: Autoregressive Generation for src/tgt models ---
     async function generateText(prompt) {
         if (!tokenizer || !session) {
             throw new Error("Tokenizer or session not initialized.");
         }
 
         // 1. Encode the user's prompt to get the `src` tensor
-        const srcIds = tokenizer.encode(prompt);
+        const srcIds = tokenizer.encode(prompt).filter(id => typeof id === 'number');
         const srcTensor = new ort.Tensor('int64', BigInt64Array.from(srcIds.map(BigInt)), [1, srcIds.length]);
 
         // 2. Initialize the `tgt` tensor with the Beginning-Of-Sentence (BOS) token
         const bosTokenId = tokenizer.cls_token_id || 0;
         let tgtIds = [bosTokenId];
         
-        // This will store the model's attention cache (past key values)
+        // EDITED: This will store the model's attention cache (past key values)
         let pastKeyValues = null;
 
         // 3. Autoregressively generate tokens
@@ -136,7 +145,7 @@ document.addEventListener('DOMContentLoaded', () => {
             // Add the new token to our generated sequence
             tgtIds.push(nextTokenId);
             
-            // Update the attention cache for the next iteration
+            // EDITED: Update the attention cache for the next iteration
             pastKeyValues = {};
             for (const key in results) {
                 if (key.startsWith('present')) {
