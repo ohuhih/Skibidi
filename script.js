@@ -87,12 +87,12 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         // 1. Encode the user's prompt to get the `src` tensor
-        // EDITED: Filter out any undefined values from the tokenizer output to prevent errors.
         const srcIds = tokenizer.encode(prompt).filter(id => typeof id === 'number');
         const srcTensor = new ort.Tensor('int64', BigInt64Array.from(srcIds.map(BigInt)), [1, srcIds.length]);
 
         // 2. Initialize the `tgt` tensor with the Beginning-Of-Sentence (BOS) token
-        const bosTokenId = tokenizer.tokenToId('[BOS]') || tokenizer.cls_token_id || 0;
+        // EDITED: Use the correct property `cls_token_id` for the BOS token.
+        const bosTokenId = tokenizer.cls_token_id || 0;
         let tgtIds = [bosTokenId];
 
         // 3. Autoregressively generate tokens
@@ -119,7 +119,8 @@ document.addEventListener('DOMContentLoaded', () => {
             }
             
             // Stop if we generate the End-Of-Sentence (EOS) token
-            const eosTokenId = tokenizer.tokenToId('[EOS]') || tokenizer.sep_token_id || 1;
+            // EDITED: Use the correct property `sep_token_id` for the EOS token.
+            const eosTokenId = tokenizer.sep_token_id || 1;
             if (nextTokenId === eosTokenId) {
                 break;
             }
