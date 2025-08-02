@@ -28,6 +28,7 @@ document.addEventListener('DOMContentLoaded', () => {
             loadingMessage.textContent = 'Loading tokenizer configuration...';
             const tokenizerConfigResponse = await fetch(tokenizerConfigUrl);
             const tokenizerConfig = await tokenizerConfigResponse.json();
+
             const tokenizerResponse = await fetch(tokenizerUrl);
             const tokenizerJson = await tokenizerResponse.json();
 
@@ -35,20 +36,26 @@ document.addEventListener('DOMContentLoaded', () => {
             tokenizer = new BertTokenizer(tokenizerJson, tokenizerConfig);
 
             ort.env.logLevel = 'verbose';
-            ort.env.wasm.wasmPaths = 'https://cdn.jsdelivr.net/npm/onnxruntime-web@1.15.0/dist/';
+            ort.env.wasm.wasmPaths = 'https://cdn.jsdelivr.net/npm/onnxruntime-web@1.18.0/dist/';
+            ort.env.wasm.proxy = true;
             ort.env.wasm.numThreads = 1;
             ort.env.wasm.simd = false;
 
-            loadingMessage.textContent = 'Loading model...';
-            session = await ort.InferenceSession.create(modelUrl, {
-                executionProviders: ['wasm'],
-                graphOptimizationLevel: 'all',
-                enableMemPattern: false
-            });
+            await ort.env.initialize();
 
-            // 🔍 Print input/output names
-            console.log('Model input names:', session.inputNames);
-            console.log('Model output names:', session.outputNames);
+            loadingMessage.textContent = 'Loading model...';
+            try {
+                session = await ort.InferenceSession.create(modelUrl, {
+                    executionProviders: ['wasm'],
+                    graphOptimizationLevel: 'all',
+                    enableMemPattern: false
+                });
+            } catch (wasmError) {
+                console.warn("WASM backend failed. Trying CPU fallback.", wasmError);
+                session = await ort.InferenceSession.create(modelUrl, {
+                    executionProviders: ['cpu']
+                });
+            }
 
             chatDisplay.removeChild(loadingMessage);
             const readyMessage = document.createElement('div');
@@ -74,9 +81,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         const padTokenId = 0;
         const srcIds = tokenizer.encode(prompt).filter(id => typeof id === 'number');
-        if (srcIds.length > maxSourceLength) {
-            srcIds.splice(maxSourceLength);
-        }
+        if (srcIds.length > maxSourceLength) srcIds.splice(maxSourceLength);
         const paddedSrcIds = new Array(maxSourceLength).fill(padTokenId);
         paddedSrcIds.splice(0, srcIds.length, ...srcIds);
         const srcTensor = new ort.Tensor('int64', BigInt64Array.from(paddedSrcIds.map(BigInt)), [1, maxSourceLength]);
@@ -89,19 +94,8 @@ document.addEventListener('DOMContentLoaded', () => {
             paddedTgtIds.splice(0, tgtIds.length, ...tgtIds);
             const tgtTensor = new ort.Tensor('int64', BigInt64Array.from(paddedTgtIds.map(BigInt)), [1, maxGenerationLength]);
 
-            const feeds = {
-                src: srcTensor,
-                tgt: tgtTensor
-            };
-
-            let results;
-            try {
-                results = await session.run(feeds);
-            } catch (err) {
-                console.error('Error running model:', err);
-                throw err;
-            }
-
+            const feeds = { src: srcTensor, tgt: tgtTensor };
+            const results = await session.run(feeds);
             const logits = results.output;
 
             const vocabSize = logits.dims[2];
@@ -117,10 +111,7 @@ document.addEventListener('DOMContentLoaded', () => {
             }
 
             const eosTokenId = tokenizer.sep_token_id || 1;
-            if (nextTokenId === eosTokenId || nextTokenId === padTokenId) {
-                break;
-            }
-
+            if (nextTokenId === eosTokenId || nextTokenId === padTokenId) break;
             tgtIds.push(nextTokenId);
         }
 
@@ -163,8 +154,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const timestamp = document.createElement('span');
         timestamp.classList.add('timestamp');
         const now = new Date();
-        const timeString = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-        timestamp.textContent = timeString;
+        timestamp.textContent = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 
         const copyBtn = document.createElement('button');
         copyBtn.classList.add('copy-btn');
@@ -200,7 +190,6 @@ document.addEventListener('DOMContentLoaded', () => {
     function sendMessage() {
         const message = userInput.value.trim();
         if (message === '') return;
-
         appendMessage(message, 'user');
         userInput.value = '';
         getChatbotResponse(message);
