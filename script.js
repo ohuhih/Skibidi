@@ -35,7 +35,7 @@ document.addEventListener('DOMContentLoaded', () => {
             
             // Define the exact URLs for all necessary files.
             const modelUrl = 'https://huggingface.co/Nayusai/chtbot/resolve/main/onnx/model.onnx';
-            const tokenizerPath = 'https://huggingface.co/Nayusai/chtbot/resolve/main/';
+            const tokenizerPath = 'https://github.com/ohuhih/Skibidi/blob/main/models/';
 
             loadingMessage.textContent = 'Loading tokenizer...';
             // Load the tokenizer from your Hugging Face repository.
@@ -272,3 +272,4 @@ document.addEventListener('DOMContentLoaded', () => {
     // --- Initialize the model when the page loads ---
     initializeModel();
 });
+
