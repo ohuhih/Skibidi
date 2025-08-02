@@ -31,15 +31,26 @@ document.addEventListener('DOMContentLoaded', () => {
 
         try {
             // Using a specific, known-stable version of the transformers library
-            const { AutoTokenizer } = await import('https://cdn.jsdelivr.net/npm/@xenova/transformers@2.17.1');
+            const { BertTokenizer } = await import('https://cdn.jsdelivr.net/npm/@xenova/transformers@2.17.1');
             
             // Define the exact URLs for all necessary files.
             const modelUrl = 'https://huggingface.co/Nayusai/chtbot/resolve/main/onnx/model.onnx';
-            const tokenizerPath = 'https://github.com/ohuhih/Skibidi/blob/main/models/';
+            const tokenizerUrl = 'https://huggingface.co/Nayusai/chtbot/raw/main/tokenizer.json';
+            const tokenizerConfigUrl = 'https://huggingface.co/Nayusai/chtbot/raw/main/tokenizer_config.json';
 
-            loadingMessage.textContent = 'Loading tokenizer...';
-            // Load the tokenizer from your Hugging Face repository.
-            tokenizer = await AutoTokenizer.from_pretrained(tokenizerPath);
+            loadingMessage.textContent = 'Loading tokenizer configuration...';
+            // Manually fetch the configuration files to bypass the library's fallback.
+            const tokenizerConfigResponse = await fetch(tokenizerConfigUrl);
+            if (!tokenizerConfigResponse.ok) throw new Error(`Failed to fetch tokenizer config: ${tokenizerConfigResponse.statusText}`);
+            const tokenizerConfig = await tokenizerConfigResponse.json();
+            
+            const tokenizerResponse = await fetch(tokenizerUrl);
+            if (!tokenizerResponse.ok) throw new Error(`Failed to fetch tokenizer: ${tokenizerResponse.statusText}`);
+            const tokenizerJson = await tokenizerResponse.json();
+
+            loadingMessage.textContent = 'Creating tokenizer...';
+            // Manually create the tokenizer from the fetched configuration.
+            tokenizer = new BertTokenizer(tokenizerJson, tokenizerConfig);
             
             // Configure the ONNX runtime
             ort.env.wasm.wasmPaths = 'https://cdn.jsdelivr.net/npm/onnxruntime-web@1.17.1/dist/';
@@ -272,4 +283,3 @@ document.addEventListener('DOMContentLoaded', () => {
     // --- Initialize the model when the page loads ---
     initializeModel();
 });
-
