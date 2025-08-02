@@ -5,13 +5,6 @@ IMPORTANT: HOW TO RUN THIS PROJECT
 This project is designed to be run from a web server, not by opening the
 index.html file directly. Deploying to a service like GitHub Pages (which you
 have done) is the perfect way to run it.
-
-For local testing, you must use a server that sends the correct security headers.
-
-1. Install Node.js and npm from https://nodejs.org/
-2. In your project folder, run: npm install -g serve
-3. To start the server, run: serve -l 8000 -C
-4. Open your browser to: http://localhost:8000
 ================================================================================
 */
 document.addEventListener('DOMContentLoaded', () => {
@@ -46,19 +39,17 @@ document.addEventListener('DOMContentLoaded', () => {
             // Using a specific, known-stable version of the all-in-one library
             const { pipeline } = await import('https://cdn.jsdelivr.net/npm/@xenova/transformers@2.17.1');
             
-            // This model is a pre-converted, known-good version of DistilBERT for question answering.
-            // It is guaranteed to be compatible with the library.
-            const modelName = 'Xenova/distilbert-base-cased-distilled-squad';
+            // EDITED: This now points to the current directory, since you have no folders.
+            // The library will look for config.json, tokenizer.json, etc., in the same
+            // directory as your index.html file.
+            const modelPath = './';
 
             loadingMessage.textContent = 'Loading AI model...';
-            questionAnswerer = await pipeline('question-answering', modelName, {
-                quantized: true, // Use a smaller, faster version of the model
+            questionAnswerer = await pipeline('question-answering', modelPath, {
+                quantized: true,
                 progress_callback: (progress) => {
                     loadingMessage.textContent = `Loading: ${progress.file} (${Math.round(progress.progress)}%)`;
-                },
-                // EDITED: This forces the library to download files from the internet
-                // instead of trying to find them locally, which fixes the 404 errors.
-                local_files_only: false 
+                }
             });
 
             chatDisplay.removeChild(loadingMessage);
@@ -73,7 +64,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         } catch (error) {
             console.error('Failed to initialize the AI model:', error);
-            loadingMessage.textContent = 'Error: Could not load the AI model.';
+            loadingMessage.textContent = 'Error: Could not load model. Check console & file paths.';
             loadingMessage.style.backgroundColor = '#f87171'; // Red color for error
             loadingMessage.style.color = '#7f1d1d';
         }
