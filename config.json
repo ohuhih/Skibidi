@@ -1,23 +1,40 @@
 {
-  "_name_or_path": "distilbert-base-cased-distilled-squad",
-  "activation": "gelu",
+  "_name_or_path": "t5-small",
   "architectures": [
-    "DistilBertForQuestionAnswering"
+    "T5ForConditionalGeneration"
   ],
-  "attention_dropout": 0.1,
-  "dim": 768,
-  "dropout": 0.1,
-  "hidden_dim": 3072,
-  "initializer_range": 0.02,
-  "max_position_embeddings": 512,
-  "model_type": "distilbert",
-  "n_heads": 12,
-  "n_layers": 6,
-  "output_past": true,
+  "model_type": "t5",
+  "d_model": 512,
+  "d_kv": 64,
+  "d_ff": 2048,
+  "num_layers": 6,
+  "num_decoder_layers": 6,
+  "num_heads": 8,
+  "relative_attention_num_buckets": 32,
+  "dropout_rate": 0.1,
+  "layer_norm_epsilon": 1e-06,
+  "initializer_factor": 1.0,
+  "feed_forward_proj": "relu",
+  "is_encoder_decoder": true,
+  "use_cache": true,
   "pad_token_id": 0,
-  "qa_dropout": 0.1,
-  "sinusoidal_pos_embds": false,
-  "tie_weights_": true,
-  "transformers_version": "4.28.1",
-  "vocab_size": 28996
+  "eos_token_id": 1,
+  "decoder_start_token_id": 0,
+  "task_specific_params": {
+    "summarization": {
+      "early_stopping": true,
+      "length_penalty": 2.0,
+      "max_length": 200,
+      "min_length": 30,
+      "no_repeat_ngram_size": 3,
+      "num_beams": 4,
+      "prefix": "summarize: "
+    },
+    "translation_en_to_de": {
+      "early_stopping": true,
+      "max_length": 300,
+      "num_beams": 4,
+      "prefix": "translate English to German: "
+    }
+  }
 }
