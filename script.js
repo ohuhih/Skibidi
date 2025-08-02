@@ -1,10 +1,10 @@
 /*
 ================================================================================
-FINAL WORKING VERSION
+FINAL WORKING VERSION (with Static Padding)
 ================================================================================
-This version includes the fix for the ONNX Runtime memory allocation error by
-setting `enableMemPattern: false` during session creation. This script is
-tailored to your specific model architecture.
+This version implements a static padding strategy to resolve the ONNX Runtime
+memory allocation error. The `tgt` tensor will now have a fixed size in every
+step of the generation loop, which is the most robust solution for this issue.
 ================================================================================
 */
 document.addEventListener('DOMContentLoaded', () => {
@@ -60,7 +60,7 @@ document.addEventListener('DOMContentLoaded', () => {
             session = await ort.InferenceSession.create(modelUrl, {
                 executionProviders: ['wasm'],
                 graphOptimizationLevel: 'all',
-                // This line is added to fix the dynamic shape memory error
+                // This flag is kept as a safeguard, but the padding strategy is the primary fix.
                 enableMemPattern: false 
             });
 
@@ -82,56 +82,64 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
     
-    // --- Autoregressive Generation for a model WITHOUT a key-value cache ---
+    // --- Autoregressive Generation with Static Padding ---
     async function generateText(prompt) {
         if (!tokenizer || !session) {
             throw new Error("Tokenizer or session not initialized.");
         }
 
-        // 1. Encode the user's prompt to get the `src` tensor. This will not change.
+        // Define the padding token ID. For BERT-style models, this is almost always 0.
+        const padTokenId = 0;
+
+        // 1. Encode the user's prompt for the 'src' tensor.
         const srcIds = tokenizer.encode(prompt).filter(id => typeof id === 'number');
         const srcTensor = new ort.Tensor('int64', BigInt64Array.from(srcIds.map(BigInt)), [1, srcIds.length]);
 
-        // 2. Initialize the `tgt` sequence with just the Beginning-Of-Sentence (BOS) token.
+        // 2. Initialize the target sequence with the BOS token.
         const bosTokenId = tokenizer.cls_token_id || 0;
         let tgtIds = [bosTokenId];
         
-        // 3. Autoregressively generate tokens one by one.
+        // 3. Autoregressive generation loop.
         for (let i = 0; i < maxGenerationLength; i++) {
-            // On each iteration, create a new `tgt` tensor from ALL tokens generated so far.
-            const tgtTensor = new ort.Tensor('int64', BigInt64Array.from(tgtIds.map(BigInt)), [1, tgtIds.length]);
+            // --- PADDING LOGIC ---
+            // Create a new array of the maximum length, filled with padding tokens.
+            const paddedIds = new Array(maxGenerationLength).fill(padTokenId);
+            // Copy the tokens we have generated so far into the beginning of the padded array.
+            paddedIds.splice(0, tgtIds.length, ...tgtIds);
+            
+            // Create the target tensor. Its shape will ALWAYS be [1, maxGenerationLength],
+            // which prevents the memory error.
+            const tgtTensor = new ort.Tensor('int64', BigInt64Array.from(paddedIds.map(BigInt)), [1, maxGenerationLength]);
 
-            // The model expects the full source and the full current target every time.
             const feeds = {
                 src: srcTensor,
                 tgt: tgtTensor
             };
             
             const results = await session.run(feeds);
-            // The output name from your Netron screenshot is 'output'.
             const logits = results.output; 
 
-            // Get the logits for only the VERY LAST token in the sequence.
+            // Get the logits for the *next token to be generated*.
+            // Its position in the sequence corresponds to the current length of our actual generated tokens.
             const vocabSize = logits.dims[2];
-            const lastTokenLogits = logits.data.slice((tgtIds.length - 1) * vocabSize, tgtIds.length * vocabSize);
+            const nextTokenLogits = logits.data.slice(i * vocabSize, (i + 1) * vocabSize);
 
-            // Find the next token with the highest probability (greedy search).
+            // Find the next token with the highest probability.
             let maxLogit = -Infinity;
             let nextTokenId = 0;
             for (let j = 0; j < vocabSize; j++) {
-                if (lastTokenLogits[j] > maxLogit) {
-                    maxLogit = lastTokenLogits[j];
+                if (nextTokenLogits[j] > maxLogit) {
+                    maxLogit = nextTokenLogits[j];
                     nextTokenId = j;
                 }
             }
             
-            // Stop if we generate the End-Of-Sentence (EOS) token.
             const eosTokenId = tokenizer.sep_token_id || 1;
             if (nextTokenId === eosTokenId) {
                 break;
             }
 
-            // Add the newly generated token to our sequence for the *next* iteration.
+            // Add the real generated token to our list.
             tgtIds.push(nextTokenId);
         }
 
