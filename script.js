@@ -1,10 +1,10 @@
 /*
 ================================================================================
-FINAL WORKING VERSION (with Static Padding)
+FINAL WORKING VERSION (with Dual Static Padding)
 ================================================================================
-This version implements a static padding strategy to resolve the ONNX Runtime
-memory allocation error. The `tgt` tensor will now have a fixed size in every
-step of the generation loop, which is the most robust solution for this issue.
+This version implements a dual static padding strategy for both `src` and `tgt`
+tensors to resolve the persistent ONNX Runtime memory allocation error. Both
+inputs will now have a fixed size, which is the most robust solution.
 ================================================================================
 */
 document.addEventListener('DOMContentLoaded', () => {
@@ -19,6 +19,7 @@ document.addEventListener('DOMContentLoaded', () => {
     let tokenizer = null;
     let isModelReady = false;
     const maxGenerationLength = 50; // Max number of tokens to generate
+    const maxSourceLength = 128; // Max number of tokens for the user's input
 
     // --- New function to initialize the model on page load ---
     async function initializeModel() {
@@ -82,7 +83,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
     
-    // --- Autoregressive Generation with Static Padding ---
+    // --- Autoregressive Generation with Dual Static Padding ---
     async function generateText(prompt) {
         if (!tokenizer || !session) {
             throw new Error("Tokenizer or session not initialized.");
@@ -91,9 +92,15 @@ document.addEventListener('DOMContentLoaded', () => {
         // Define the padding token ID. For BERT-style models, this is almost always 0.
         const padTokenId = 0;
 
-        // 1. Encode the user's prompt for the 'src' tensor.
+        // 1. Encode and PAD the user's prompt for the 'src' tensor.
         const srcIds = tokenizer.encode(prompt).filter(id => typeof id === 'number');
-        const srcTensor = new ort.Tensor('int64', BigInt64Array.from(srcIds.map(BigInt)), [1, srcIds.length]);
+        if (srcIds.length > maxSourceLength) {
+            srcIds.splice(maxSourceLength); // Truncate if too long
+        }
+        const paddedSrcIds = new Array(maxSourceLength).fill(padTokenId);
+        paddedSrcIds.splice(0, srcIds.length, ...srcIds);
+        const srcTensor = new ort.Tensor('int64', BigInt64Array.from(paddedSrcIds.map(BigInt)), [1, maxSourceLength]);
+
 
         // 2. Initialize the target sequence with the BOS token.
         const bosTokenId = tokenizer.cls_token_id || 0;
@@ -101,15 +108,10 @@ document.addEventListener('DOMContentLoaded', () => {
         
         // 3. Autoregressive generation loop.
         for (let i = 0; i < maxGenerationLength; i++) {
-            // --- PADDING LOGIC ---
-            // Create a new array of the maximum length, filled with padding tokens.
-            const paddedIds = new Array(maxGenerationLength).fill(padTokenId);
-            // Copy the tokens we have generated so far into the beginning of the padded array.
-            paddedIds.splice(0, tgtIds.length, ...tgtIds);
-            
-            // Create the target tensor. Its shape will ALWAYS be [1, maxGenerationLength],
-            // which prevents the memory error.
-            const tgtTensor = new ort.Tensor('int64', BigInt64Array.from(paddedIds.map(BigInt)), [1, maxGenerationLength]);
+            // --- PADDING LOGIC for TGT ---
+            const paddedTgtIds = new Array(maxGenerationLength).fill(padTokenId);
+            paddedTgtIds.splice(0, tgtIds.length, ...tgtIds);
+            const tgtTensor = new ort.Tensor('int64', BigInt64Array.from(paddedTgtIds.map(BigInt)), [1, maxGenerationLength]);
 
             const feeds = {
                 src: srcTensor,
@@ -120,7 +122,6 @@ document.addEventListener('DOMContentLoaded', () => {
             const logits = results.output; 
 
             // Get the logits for the *next token to be generated*.
-            // Its position in the sequence corresponds to the current length of our actual generated tokens.
             const vocabSize = logits.dims[2];
             const nextTokenLogits = logits.data.slice(i * vocabSize, (i + 1) * vocabSize);
 
@@ -135,7 +136,8 @@ document.addEventListener('DOMContentLoaded', () => {
             }
             
             const eosTokenId = tokenizer.sep_token_id || 1;
-            if (nextTokenId === eosTokenId) {
+            // Stop if we generate the EOS token or a PAD token
+            if (nextTokenId === eosTokenId || nextTokenId === padTokenId) {
                 break;
             }
 
