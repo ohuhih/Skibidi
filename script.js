@@ -2,9 +2,9 @@
 ================================================================================
 FINAL WORKING VERSION
 ================================================================================
-This version is designed to work with your specific `src`/`tgt` model. It
-manually loads all necessary files from their exact URLs and uses the correct
-autoregressive generation loop for your model's architecture.
+This version is designed to work with your specific `src`/`tgt` model that
+does not have a key-value cache. It uses the correct autoregressive generation
+loop for this architecture.
 ================================================================================
 */
 document.addEventListener('DOMContentLoaded', () => {
@@ -80,53 +80,40 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
     
-    // --- CORRECTED: Autoregressive Generation for src/tgt models ---
+    // --- CORRECTED: Autoregressive Generation for a model WITHOUT a key-value cache ---
     async function generateText(prompt) {
         if (!tokenizer || !session) {
             throw new Error("Tokenizer or session not initialized.");
         }
 
-        // 1. Encode the user's prompt to get the `src` tensor
+        // 1. Encode the user's prompt to get the `src` tensor. This will not change.
         const srcIds = tokenizer.encode(prompt).filter(id => typeof id === 'number');
         const srcTensor = new ort.Tensor('int64', BigInt64Array.from(srcIds.map(BigInt)), [1, srcIds.length]);
 
-        // 2. Initialize the `tgt` tensor with the Beginning-Of-Sentence (BOS) token
+        // 2. Initialize the `tgt` sequence with just the Beginning-Of-Sentence (BOS) token.
         const bosTokenId = tokenizer.cls_token_id || 0;
         let tgtIds = [bosTokenId];
         
-        // EDITED: This will store the model's attention cache (past key values)
-        let pastKeyValues = null;
-
-        // 3. Autoregressively generate tokens
+        // 3. Autoregressively generate tokens one by one.
         for (let i = 0; i < maxGenerationLength; i++) {
-            let feeds;
-            let currentTgtIds;
+            // On each iteration, create a new `tgt` tensor from ALL tokens generated so far.
+            const tgtTensor = new ort.Tensor('int64', BigInt64Array.from(tgtIds.map(BigInt)), [1, tgtIds.length]);
 
-            // On the first step, the target sequence is just the BOS token.
-            // On subsequent steps, it's only the *last* generated token.
-            if (i === 0) {
-                currentTgtIds = tgtIds;
-            } else {
-                currentTgtIds = [tgtIds[tgtIds.length - 1]];
-            }
-
-            const tgtTensor = new ort.Tensor('int64', BigInt64Array.from(currentTgtIds.map(BigInt)), [1, currentTgtIds.length]);
-
-            // On the first step, we provide `src`. On later steps, we provide the attention cache.
-            if (i === 0) {
-                feeds = { src: srcTensor, tgt: tgtTensor };
-            } else {
-                feeds = { src: srcTensor, tgt: tgtTensor, ...pastKeyValues };
-            }
+            // The model expects the full source and the full current target every time.
+            const feeds = {
+                src: srcTensor,
+                tgt: tgtTensor
+            };
             
             const results = await session.run(feeds);
-            const logits = results.output.data;
+            // The output name from your Netron screenshot is 'output'.
+            const logits = results.output; 
 
-            // Get the logits for the very last generated token
-            const vocabSize = results.output.dims[2];
-            const lastTokenLogits = logits.slice((currentTgtIds.length - 1) * vocabSize, currentTgtIds.length * vocabSize);
+            // Get the logits for only the VERY LAST token in the sequence.
+            const vocabSize = logits.dims[2];
+            const lastTokenLogits = logits.data.slice((tgtIds.length - 1) * vocabSize, tgtIds.length * vocabSize);
 
-            // Sample the next token ID (greedy search)
+            // Find the next token with the highest probability (greedy search).
             let maxLogit = -Infinity;
             let nextTokenId = 0;
             for (let j = 0; j < vocabSize; j++) {
@@ -136,25 +123,17 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
             }
             
-            // Stop if we generate the End-Of-Sentence (EOS) token
+            // Stop if we generate the End-Of-Sentence (EOS) token.
             const eosTokenId = tokenizer.sep_token_id || 1;
             if (nextTokenId === eosTokenId) {
                 break;
             }
 
-            // Add the new token to our generated sequence
+            // Add the newly generated token to our sequence for the *next* iteration.
             tgtIds.push(nextTokenId);
-            
-            // EDITED: Update the attention cache for the next iteration
-            pastKeyValues = {};
-            for (const key in results) {
-                if (key.startsWith('present')) {
-                    pastKeyValues[key.replace('present', 'past_key_values')] = results[key];
-                }
-            }
         }
 
-        // 4. Decode the generated tokens, skipping the initial BOS token
+        // 4. Decode the generated tokens, skipping the initial BOS token.
         return tokenizer.decode(tgtIds.slice(1));
     }
 
