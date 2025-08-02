@@ -40,13 +40,13 @@ document.addEventListener('DOMContentLoaded', () => {
             // Using a specific, known-stable version
             const { BertTokenizer } = await import('https://cdn.jsdelivr.net/npm/@xenova/transformers@2.17.1');
             
-            // EDITED: Define the exact URLs for all necessary files.
+            // Define the exact URLs for all necessary files.
             const modelUrl = 'https://github.com/ohuhih/Skibidi/releases/download/test/transformer_chatbot.onnx';
             const tokenizerUrl = 'https://raw.githubusercontent.com/ohuhih/Skibidi/main/models/tokenizer.json';
             const tokenizerConfigUrl = 'https://raw.githubusercontent.com/ohuhih/Skibidi/main/models/tokenizer_config.json';
 
             loadingMessage.textContent = 'Loading tokenizer configuration...';
-            // EDITED: Manually fetch the configuration files to bypass the library's fallback.
+            // Manually fetch the configuration files to bypass the library's fallback.
             const tokenizerConfigResponse = await fetch(tokenizerConfigUrl);
             const tokenizerConfig = await tokenizerConfigResponse.json();
             
@@ -54,13 +54,12 @@ document.addEventListener('DOMContentLoaded', () => {
             const tokenizerJson = await tokenizerResponse.json();
 
             loadingMessage.textContent = 'Creating tokenizer...';
-            // EDITED: Manually create the tokenizer from the fetched configuration.
+            // Manually create the tokenizer from the fetched configuration.
             // Since DistilBERT uses the BertTokenizer, we can instantiate it directly.
             tokenizer = new BertTokenizer(tokenizerJson, tokenizerConfig);
             
-            loadingMessage.textContent = 'Loading model library...';
-            // This import attaches the `ort` object to the global window scope.
-            await import('https://cdn.jsdelivr.net/npm/onnxruntime-web@1.17.1/dist/ort.es6.min.js');
+            // The ONNX runtime is now loaded via a <script> tag in index.html,
+            // so we no longer need to import it here.
             
             // Configure the ONNX runtime to prevent browser errors
             ort.env.wasm.wasmPaths = 'https://cdn.jsdelivr.net/npm/onnxruntime-web@1.17.1/dist/';
