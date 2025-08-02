@@ -88,8 +88,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
         // 1. Encode the user's prompt to get the `src` tensor
         const srcIds = tokenizer.encode(prompt).filter(id => typeof id === 'number');
-        // EDITED: Use Int32Array instead of BigInt64Array to fix potential data type mismatch.
-        const srcTensor = new ort.Tensor('int64', Int32Array.from(srcIds), [1, srcIds.length]);
+        // EDITED: Reverted to BigInt64Array as required by the ONNX runtime for int64 tensors.
+        const srcTensor = new ort.Tensor('int64', BigInt64Array.from(srcIds.map(BigInt)), [1, srcIds.length]);
 
         // 2. Initialize the `tgt` tensor with the Beginning-Of-Sentence (BOS) token
         const bosTokenId = tokenizer.cls_token_id || 0;
@@ -97,8 +97,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
         // 3. Autoregressively generate tokens
         for (let i = 0; i < maxGenerationLength; i++) {
-            // EDITED: Use Int32Array here as well.
-            const tgtTensor = new ort.Tensor('int64', Int32Array.from(tgtIds), [1, tgtIds.length]);
+            // EDITED: Reverted to BigInt64Array here as well.
+            const tgtTensor = new ort.Tensor('int64', BigInt64Array.from(tgtIds.map(BigInt)), [1, tgtIds.length]);
 
             // Prepare the inputs for the model
             const feeds = { src: srcTensor, tgt: tgtTensor };
