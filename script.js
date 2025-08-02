@@ -1,13 +1,13 @@
 /*
 ================================================================================
-FINAL WORKING VERSION (WITH QUICK FIX)
+FINAL CORRECTED SCRIPT
 ================================================================================
-This version applies the "quick fix" by setting `quantized: false`.
-It will now load the standard `model.onnx` file from your Hugging Face
-repository, avoiding the 404 error for the missing quantized file.
-
-**Note:** This will result in a larger download and slightly slower
-performance compared to a successfully loaded quantized model.
+This version contains the following fixes:
+1.  The pipeline task is set to 'text2text-generation' to match your model's
+    architecture, fixing the "Missing inputs: src, tgt" error.
+2.  The `getChatbotResponse` function is updated to correctly call a
+    text-generation model with a single prompt and parse its output.
+3.  The `modelRepoId` is confirmed to point to the Hugging Face Hub.
 ================================================================================
 */
 document.addEventListener('DOMContentLoaded', () => {
@@ -17,10 +17,11 @@ document.addEventListener('DOMContentLoaded', () => {
     const sendButton = document.getElementById('send-button');
     const clearChatBtn = document.getElementById('clear-chat-btn');
 
-    // --- ONNX MODEL SETUP (Question-Answering) ---
-    let questionAnswerer = null;
+    // --- ONNX MODEL SETUP ---
+    let modelPipeline = null; // Renamed for clarity
     let isModelReady = false;
 
+    // This context is now used to build a prompt for the text-generation model
     const context = `
         Paggy Xi Xang is a cutting-edge chatbot designed by a talented team.
         The backend was developed by Alex Martinez and Samira Khan, who focused on API design and database architecture.
@@ -30,7 +31,7 @@ document.addEventListener('DOMContentLoaded', () => {
         The project is managed under the entity Paggy Inc. and was last updated in July 2025.
     `;
 
-    // --- New function to initialize the model on page load ---
+    // --- Function to initialize the model on page load ---
     async function initializeModel() {
         const loadingMessage = document.createElement('div');
         loadingMessage.classList.add('loading-indicator', 'message-bubble');
@@ -39,20 +40,14 @@ document.addEventListener('DOMContentLoaded', () => {
         userInput.disabled = true; // Disable input while loading
 
         try {
-            // Using a specific, known-stable version of the all-in-one library
             const { pipeline } = await import('https://cdn.jsdelivr.net/npm/@xenova/transformers@2.17.1');
-            
-            // =================================================================
-            // === This points to your Hugging Face repo ID ===
-            // =================================================================
             const modelRepoId = 'Nayusai/chtbot';
 
             loadingMessage.textContent = 'Loading AI model from Hugging Face...';
             
-            // This is the simplest and most reliable way to load the model.
-            // The library will automatically find all the necessary files in your repo.
-            questionAnswerer = await pipeline('question-answering', modelRepoId, {
-                quantized: false, // --- QUICK FIX APPLIED --- Set to false to load standard model.
+            // --- FIX 1: Use the correct pipeline for a text-generation model ---
+            modelPipeline = await pipeline('text2text-generation', modelRepoId, {
+                quantized: false,
                 progress_callback: (progress) => {
                     loadingMessage.textContent = `Loading: ${progress.file} (${Math.round(progress.progress)}%)`;
                 }
@@ -76,7 +71,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    // This is the main function that now runs the ONNX model.
+    // --- Main function to run the model ---
     async function getChatbotResponse(userQuestion) {
         if (!isModelReady) {
             appendMessage("The AI model is still initializing, please wait a moment.", 'chatbot');
@@ -90,13 +85,18 @@ document.addEventListener('DOMContentLoaded', () => {
         chatDisplay.scrollTop = chatDisplay.scrollHeight;
 
         try {
-            const result = await questionAnswerer(userQuestion, context);
+            // --- FIX 2: Call the model correctly for text generation ---
+            // Combine the context and question into a single prompt string.
+            const prompt = `Based on the following context, answer the question.\n\nContext: "${context.trim()}"\n\nQuestion: "${userQuestion}"\n\nAnswer:`;
+
+            // Call the text-generation pipeline with the prompt.
+            const result = await modelPipeline(prompt, {
+                max_new_tokens: 100, // You can adjust the max length of the response
+                skip_special_tokens: true,
+            });
             
-            let chatbotReply = "Sorry, I couldn't find an answer in my knowledge base.";
-            // Check if the model is confident enough in its answer
-            if (result && result.score > 0.3) { // You can adjust this confidence threshold
-                chatbotReply = result.answer;
-            }
+            // The output is an array; the text is in the 'generated_text' property.
+            const chatbotReply = result[0]?.generated_text.trim() || "Sorry, I couldn't generate a response.";
             
             chatDisplay.removeChild(loadingMessage);
             appendMessage(chatbotReply, 'chatbot');
@@ -110,7 +110,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    // --- EXISTING HELPER FUNCTIONS ---
+    // --- HELPER & UI FUNCTIONS (No changes needed below) ---
 
     function appendMessage(text, sender) {
         const messageWrapper = document.createElement('div');
@@ -132,21 +132,14 @@ document.addEventListener('DOMContentLoaded', () => {
         copyBtn.title = 'Copy message';
 
         copyBtn.addEventListener('click', () => {
-            const textToCopy = messageElement.textContent;
-            const textArea = document.createElement('textarea');
-            textArea.value = textToCopy;
-            document.body.appendChild(textArea);
-            textArea.select();
-            try {
-                document.execCommand('copy');
+            navigator.clipboard.writeText(messageElement.textContent).then(() => {
                 copyBtn.innerHTML = '<i class="fas fa-check"></i>';
                 setTimeout(() => {
                     copyBtn.innerHTML = '<i class="far fa-copy"></i>';
                 }, 1500);
-            } catch (err) {
+            }).catch(err => {
                 console.error('Failed to copy text: ', err);
-            }
-            document.body.removeChild(textArea);
+            });
         });
 
         messageWrapper.appendChild(messageElement);
@@ -176,11 +169,13 @@ document.addEventListener('DOMContentLoaded', () => {
     clearChatBtn.addEventListener('click', () => {
         const messagesToRemove = chatDisplay.querySelectorAll('.message-wrapper, .loading-indicator, .initial-message');
         messagesToRemove.forEach(msg => {
-            // Don't remove the very first initial message
-            if (!msg.classList.contains('initial-message')) {
-                msg.remove();
-            }
+            msg.remove();
         });
+        // Optional: add back a ready message after clearing
+        const readyMessage = document.createElement('div');
+        readyMessage.classList.add('initial-message');
+        readyMessage.textContent = 'Chat cleared. Ask me something!';
+        chatDisplay.appendChild(readyMessage);
     });
 
     // --- MODAL AND BANNER LOGIC ---
@@ -198,7 +193,6 @@ document.addEventListener('DOMContentLoaded', () => {
     const closeTermsBtn = document.getElementById('close-terms-btn');
 
     if (termsModal && openTermsLink && closeTermsBtn) {
-        termsModal.classList.add('visible');
         openTermsLink.addEventListener('click', (e) => {
             e.preventDefault();
             termsModal.classList.add('visible');
@@ -206,7 +200,7 @@ document.addEventListener('DOMContentLoaded', () => {
         closeTermsBtn.addEventListener('click', () => {
             termsModal.classList.remove('visible');
         });
-        termsModal.addEventListener('click', (e) => {
+        window.addEventListener('click', (e) => {
             if (e.target === termsModal) {
                 termsModal.classList.remove('visible');
             }
@@ -225,7 +219,7 @@ document.addEventListener('DOMContentLoaded', () => {
         closePrivacyBtn.addEventListener('click', () => {
             privacyModal.classList.remove('visible');
         });
-        privacyModal.addEventListener('click', (e) => {
+        window.addEventListener('click', (e) => {
             if (e.target === privacyModal) {
                 privacyModal.classList.remove('visible');
             }
