@@ -40,14 +40,22 @@ document.addEventListener('DOMContentLoaded', () => {
             // Using a specific, known-stable version
             const { AutoTokenizer } = await import('https://cdn.jsdelivr.net/npm/@xenova/transformers@2.17.1');
             
-            // EDITED: This now points directly to the raw content URL of your models folder on GitHub.
-            const tokenizerPath = 'https://raw.githubusercontent.com/ohuhih/Skibidi/main/models/';
-            // This is the URL to your large .onnx file hosted on GitHub Releases.
+            // EDITED: Define the exact URLs for all necessary files.
             const modelUrl = 'https://github.com/ohuhih/Skibidi/releases/download/test/transformer_chatbot.onnx';
+            const tokenizerUrl = 'https://raw.githubusercontent.com/ohuhih/Skibidi/main/models/tokenizer.json';
+            const tokenizerConfigUrl = 'https://raw.githubusercontent.com/ohuhih/Skibidi/main/models/tokenizer_config.json';
+
+            loadingMessage.textContent = 'Loading tokenizer configuration...';
+            // EDITED: Manually fetch the configuration files.
+            const tokenizerConfigResponse = await fetch(tokenizerConfigUrl);
+            const tokenizerConfig = await tokenizerConfigResponse.json();
+            
+            const tokenizerResponse = await fetch(tokenizerUrl);
+            const tokenizerJson = await tokenizerResponse.json();
 
             loadingMessage.textContent = 'Loading tokenizer...';
-            // This will now correctly load your config and tokenizer files from your repo.
-            tokenizer = await AutoTokenizer.from_pretrained(tokenizerPath);
+            // EDITED: Create the tokenizer from the manually fetched configuration.
+            tokenizer = AutoTokenizer.fromConfig(tokenizerConfig, tokenizerJson);
             
             loadingMessage.textContent = 'Loading model library...';
             // This import attaches the `ort` object to the global window scope.
