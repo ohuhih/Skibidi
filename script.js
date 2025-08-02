@@ -88,26 +88,43 @@ document.addEventListener('DOMContentLoaded', () => {
 
         // 1. Encode the user's prompt to get the `src` tensor
         const srcIds = tokenizer.encode(prompt).filter(id => typeof id === 'number');
-        // EDITED: Reverted to BigInt64Array as required by the ONNX runtime for int64 tensors.
         const srcTensor = new ort.Tensor('int64', BigInt64Array.from(srcIds.map(BigInt)), [1, srcIds.length]);
 
         // 2. Initialize the `tgt` tensor with the Beginning-Of-Sentence (BOS) token
         const bosTokenId = tokenizer.cls_token_id || 0;
         let tgtIds = [bosTokenId];
+        
+        // EDITED: This will store the model's attention cache (past key values)
+        let pastKeyValues = null;
 
         // 3. Autoregressively generate tokens
         for (let i = 0; i < maxGenerationLength; i++) {
-            // EDITED: Reverted to BigInt64Array here as well.
-            const tgtTensor = new ort.Tensor('int64', BigInt64Array.from(tgtIds.map(BigInt)), [1, tgtIds.length]);
+            let feeds;
+            let currentTgtIds;
 
-            // Prepare the inputs for the model
-            const feeds = { src: srcTensor, tgt: tgtTensor };
+            // On the first step, the target sequence is just the BOS token.
+            // On subsequent steps, it's only the *last* generated token.
+            if (i === 0) {
+                currentTgtIds = tgtIds;
+            } else {
+                currentTgtIds = [tgtIds[tgtIds.length - 1]];
+            }
+
+            const tgtTensor = new ort.Tensor('int64', BigInt64Array.from(currentTgtIds.map(BigInt)), [1, currentTgtIds.length]);
+
+            // On the first step, we provide `src`. On later steps, we provide the attention cache.
+            if (i === 0) {
+                feeds = { src: srcTensor, tgt: tgtTensor };
+            } else {
+                feeds = { src: srcTensor, tgt: tgtTensor, ...pastKeyValues };
+            }
+            
             const results = await session.run(feeds);
             const logits = results.output.data;
 
             // Get the logits for the very last generated token
             const vocabSize = results.output.dims[2];
-            const lastTokenLogits = logits.slice((tgtIds.length - 1) * vocabSize, tgtIds.length * vocabSize);
+            const lastTokenLogits = logits.slice((currentTgtIds.length - 1) * vocabSize, currentTgtIds.length * vocabSize);
 
             // Sample the next token ID (greedy search)
             let maxLogit = -Infinity;
@@ -127,6 +144,14 @@ document.addEventListener('DOMContentLoaded', () => {
 
             // Add the new token to our generated sequence
             tgtIds.push(nextTokenId);
+            
+            // EDITED: Update the attention cache for the next iteration
+            pastKeyValues = {};
+            for (const key in results) {
+                if (key.startsWith('present')) {
+                    pastKeyValues[key.replace('present', 'past_key_values')] = results[key];
+                }
+            }
         }
 
         // 4. Decode the generated tokens, skipping the initial BOS token
