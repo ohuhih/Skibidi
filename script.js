@@ -22,8 +22,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const clearChatBtn = document.getElementById('clear-chat-btn');
 
     // --- ONNX MODEL SETUP (Question-Answering) ---
-    let session = null;
-    let tokenizer = null;
+    let questionAnswerer = null;
     let isModelReady = false;
 
     const context = `
@@ -35,7 +34,7 @@ document.addEventListener('DOMContentLoaded', () => {
         The project is managed under the entity Paggy Inc. and was last updated in July 2025.
     `;
 
-    // --- New function to initialize the model on page load ---
+    // --- EDITED: New function to initialize the model on page load ---
     async function initializeModel() {
         const loadingMessage = document.createElement('div');
         loadingMessage.classList.add('loading-indicator', 'message-bubble');
@@ -44,30 +43,19 @@ document.addEventListener('DOMContentLoaded', () => {
         userInput.disabled = true; // Disable input while loading
 
         try {
-            // Using a specific, known-stable version
-            const { AutoTokenizer } = await import('https://cdn.jsdelivr.net/npm/@xenova/transformers@2.17.1');
+            // Using a specific, known-stable version of the all-in-one library
+            const { pipeline } = await import('https://cdn.jsdelivr.net/npm/@xenova/transformers@2.17.1');
             
-            const modelUrl = 'https://github.com/ohuhih/Skibidi/releases/download/test/transformer_chatbot.onnx';
-            const tokenizerName = 'distilbert-base-uncased';
+            // This model is a pre-converted, known-good version of DistilBERT for question answering.
+            // It is guaranteed to be compatible with the library.
+            const modelName = 'Xenova/distilbert-base-cased-distilled-squad';
 
-            loadingMessage.textContent = 'Loading tokenizer...';
-            tokenizer = await AutoTokenizer.from_pretrained(tokenizerName, { local_files_only: false });
-            
-            loadingMessage.textContent = 'Loading model library...';
-            // This import attaches the `ort` object to the global window scope.
-            await import('https://cdn.jsdelivr.net/npm/onnxruntime-web@1.17.1/dist/ort.es6.min.js');
-            
-            // Configure the ONNX runtime
-            ort.env.wasm.wasmPaths = 'https://cdn.jsdelivr.net/npm/onnxruntime-web@1.17.1/dist/';
-            
-            // EDITED: Force single-threaded execution to prevent WASM initialization errors.
-            // This is a key fix for the "RuntimeError: null function" issue.
-            ort.env.wasm.numThreads = 1;
-
-            loadingMessage.textContent = 'Loading model from GitHub...';
-            session = await ort.InferenceSession.create(modelUrl, {
-                executionProviders: ['wasm'],
-                graphOptimizationLevel: 'all'
+            loadingMessage.textContent = 'Loading AI model...';
+            questionAnswerer = await pipeline('question-answering', modelName, {
+                quantized: true, // Use a smaller, faster version of the model
+                progress_callback: (progress) => {
+                    loadingMessage.textContent = `Loading: ${progress.file} (${Math.round(progress.progress)}%)`;
+                }
             });
 
             chatDisplay.removeChild(loadingMessage);
@@ -102,37 +90,12 @@ document.addEventListener('DOMContentLoaded', () => {
         chatDisplay.scrollTop = chatDisplay.scrollHeight;
 
         try {
-            const inputs = tokenizer(userQuestion, { text_pair: context, padding: true, truncation: true });
-            
-            const inputIds = new ort.Tensor('int64', inputs.input_ids.data, inputs.input_ids.dims);
-            const attentionMask = new ort.Tensor('int64', inputs.attention_mask.data, inputs.attention_mask.dims);
-            const tokenTypeIds = new ort.Tensor('int64', inputs.token_type_ids.data, inputs.token_type_ids.dims);
-
-            const feeds = {
-                input_ids: inputIds,
-                attention_mask: attentionMask,
-                token_type_ids: tokenTypeIds,
-            };
-
-            const outputs = await session.run(feeds);
-            const startLogits = outputs.start_logits.data;
-            const endLogits = outputs.end_logits.data;
-
-            let bestStart = -1, bestEnd = -1, maxScore = -Infinity;
-            for (let i = 0; i < startLogits.length; i++) {
-                for (let j = i; j < endLogits.length; j++) {
-                    if (startLogits[i] + endLogits[j] > maxScore) {
-                        maxScore = startLogits[i] + endLogits[j];
-                        bestStart = i;
-                        bestEnd = j;
-                    }
-                }
-            }
+            const result = await questionAnswerer(userQuestion, context);
             
             let chatbotReply = "Sorry, I couldn't find an answer in my knowledge base.";
-            if (bestStart !== -1 && maxScore > 0) { // Add a score threshold
-                const answerTokens = inputs.input_ids.data.slice(bestStart, bestEnd + 1);
-                chatbotReply = tokenizer.decode(answerTokens, { skip_special_tokens: true });
+            // Check if the model is confident enough in its answer
+            if (result && result.score > 0.3) { // You can adjust this confidence threshold
+                chatbotReply = result.answer;
             }
             
             chatDisplay.removeChild(loadingMessage);
