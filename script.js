@@ -37,18 +37,22 @@ document.addEventListener('DOMContentLoaded', () => {
 
         try {
             // Using a specific, known-stable version of the all-in-one library
-            const { pipeline } = await import('https://cdn.jsdelivr.net/npm/@xenova/transformers@2.17.1');
+            const { pipeline, AutoTokenizer } = await import('https://cdn.jsdelivr.net/npm/@xenova/transformers@2.17.1');
             
-            // EDITED: Point to the ONNX file in your GitHub Release.
-            const modelUrl = 'https://github.com/ohuhih/Skibidi/releases/download/test/transformer_chatbot.onnx';
-            
-            // EDITED: Point the tokenizer to the local directory where your JSON files are.
+            // EDITED: This now points to the current directory where your JSON files are.
             const tokenizerPath = './';
+            // EDITED: This points directly to your ONNX file on GitHub Releases.
+            const modelUrl = 'https://github.com/ohuhih/Skibidi/releases/download/test/transformer_chatbot.onnx';
 
-            loadingMessage.textContent = 'Loading AI model...';
-            // EDITED: Load the model from the URL and the tokenizer from the local path.
+            loadingMessage.textContent = 'Loading AI model components...';
+            
+            // EDITED: Manually load the tokenizer from the local path.
+            const tokenizer = await AutoTokenizer.from_pretrained(tokenizerPath);
+            
+            // EDITED: Create the pipeline, telling it to use the local tokenizer
+            // and download the model from the remote URL.
             questionAnswerer = await pipeline('question-answering', modelUrl, { 
-                tokenizer: tokenizerPath,
+                tokenizer: tokenizer,
                 progress_callback: (progress) => {
                     loadingMessage.textContent = `Loading: ${progress.file} (${Math.round(progress.progress)}%)`;
                 }
