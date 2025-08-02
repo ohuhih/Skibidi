@@ -87,7 +87,8 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         // 1. Encode the user's prompt to get the `src` tensor
-        const srcIds = tokenizer.encode(prompt).ids;
+        // EDITED: The .encode() method returns the array of IDs directly.
+        const srcIds = tokenizer.encode(prompt);
         const srcTensor = new ort.Tensor('int64', BigInt64Array.from(srcIds.map(BigInt)), [1, srcIds.length]);
 
         // 2. Initialize the `tgt` tensor with the Beginning-Of-Sentence (BOS) token
