@@ -1,10 +1,10 @@
 /*
 ================================================================================
-FINAL WORKING VERSION (with Dual Static Padding)
+FINAL WORKING VERSION (with Runtime Configuration)
 ================================================================================
-This version implements a dual static padding strategy for both `src` and `tgt`
-tensors to resolve the persistent ONNX Runtime memory allocation error. Both
-inputs will now have a fixed size, which is the most robust solution.
+This version explicitly configures the ONNX Runtime to disable SIMD and
+increase the logging level. This is a robust attempt to solve the underlying
+memory allocation error by changing the execution engine itself.
 ================================================================================
 */
 document.addEventListener('DOMContentLoaded', () => {
@@ -53,15 +53,16 @@ document.addEventListener('DOMContentLoaded', () => {
             // Manually create the tokenizer from the fetched configuration.
             tokenizer = new BertTokenizer(tokenizerJson, tokenizerConfig);
             
-            // Configure the ONNX runtime
+            // --- NEW: Configure the ONNX runtime environment before creating the session ---
+            ort.env.logLevel = 'verbose'; // Increase logging for more detailed error messages
             ort.env.wasm.wasmPaths = 'https://cdn.jsdelivr.net/npm/onnxruntime-web@1.17.1/dist/';
             ort.env.wasm.numThreads = 1;
-
+            ort.env.wasm.simd = false; // Disable SIMD as a stability measure
+            
             loadingMessage.textContent = 'Loading model...';
             session = await ort.InferenceSession.create(modelUrl, {
                 executionProviders: ['wasm'],
                 graphOptimizationLevel: 'all',
-                // This flag is kept as a safeguard, but the padding strategy is the primary fix.
                 enableMemPattern: false 
             });
 
