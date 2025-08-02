@@ -42,20 +42,12 @@ document.addEventListener('DOMContentLoaded', () => {
             
             // EDITED: Define the exact URLs for all necessary files.
             const modelUrl = 'https://github.com/ohuhih/Skibidi/releases/download/test/transformer_chatbot.onnx';
-            const tokenizerUrl = 'https://raw.githubusercontent.com/ohuhih/Skibidi/main/models/tokenizer.json';
-            const tokenizerConfigUrl = 'https://raw.githubusercontent.com/ohuhih/Skibidi/main/models/tokenizer_config.json';
-
-            loadingMessage.textContent = 'Loading tokenizer configuration...';
-            // EDITED: Manually fetch the configuration files.
-            const tokenizerConfigResponse = await fetch(tokenizerConfigUrl);
-            const tokenizerConfig = await tokenizerConfigResponse.json();
-            
-            const tokenizerResponse = await fetch(tokenizerUrl);
-            const tokenizerJson = await tokenizerResponse.json();
+            // This is the base URL for your tokenizer files in the main repository.
+            const tokenizerPath = 'https://raw.githubusercontent.com/ohuhih/Skibidi/main/models/';
 
             loadingMessage.textContent = 'Loading tokenizer...';
-            // EDITED: Create the tokenizer from the manually fetched configuration.
-            tokenizer = AutoTokenizer.fromConfig(tokenizerConfig, tokenizerJson);
+            // EDITED: Use the correct function `from_pretrained` to load the tokenizer from your repo.
+            tokenizer = await AutoTokenizer.from_pretrained(tokenizerPath);
             
             loadingMessage.textContent = 'Loading model library...';
             // This import attaches the `ort` object to the global window scope.
