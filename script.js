@@ -1,15 +1,16 @@
 /*
 ================================================================================
-FINAL SCRIPT FOR YOUR 'distilbert' MODEL (FRIDAY, AUG 1, 9:48 PM EDT)
+COMPLETE & FINAL SCRIPT (FRIDAY, AUG 1, 2025 - 9:52 PM EDT)
 ================================================================================
-This script is configured for your 'distilbert' model. It fixes all errors by
-using the correct 'question-answering' pipeline that matches your config.json.
+This is the full script, including all UI functions and model logic.
+It is correctly configured for your 'distilbert' model using the
+'question-answering' pipeline.
 */
 document.addEventListener('DOMContentLoaded', () => {
     // --- Add this line for verification ---
-    console.log("RUNNING THE FINAL Q&A SCRIPT - This message confirms the correct file is loaded.");
+    console.log("RUNNING THE COMPLETE Q&A SCRIPT - This message confirms the correct file is loaded.");
 
-    // --- CHATBOT LOGIC ---
+    // --- CHATBOT UI ELEMENTS ---
     const chatDisplay = document.getElementById('chat-display');
     const userInput = document.getElementById('user-input');
     const sendButton = document.getElementById('send-button');
@@ -42,7 +43,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const modelRepoId = 'Nayusai/chtbot';
             loadingMessage.textContent = 'Loading AI model from Hugging Face...';
             
-            // --- THE FIX: Use the 'question-answering' pipeline for a DistilBERT model. ---
+            // --- The correct pipeline for a DistilBERT model ---
             questionAnswerer = await pipeline('question-answering', modelRepoId, {
                 quantized: false,
                 progress_callback: (progress) => {
@@ -82,7 +83,7 @@ document.addEventListener('DOMContentLoaded', () => {
         chatDisplay.scrollTop = chatDisplay.scrollHeight;
 
         try {
-            // --- THE FIX: Call the pipeline correctly for question-answering ---
+            // Call the pipeline with the question and the context.
             const result = await questionAnswerer(userQuestion, context);
             
             let chatbotReply = "Sorry, I couldn't find an answer in my knowledge base.";
@@ -102,11 +103,93 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    // --- HELPER & UI FUNCTIONS (No changes needed below) ---
-    // (Omitted for brevity, your existing functions are fine)
-    function appendMessage(text, sender) { /* ... your code ... */ }
-    function sendMessage() { /* ... your code ... */ }
-    // ... all other event listeners and modal logic ...
+    // --- HELPER & UI FUNCTIONS ---
+
+    function appendMessage(text, sender) {
+        const messageWrapper = document.createElement('div');
+        messageWrapper.classList.add('message-wrapper', `${sender}-wrapper`);
+        const messageElement = document.createElement('div');
+        messageElement.classList.add('message-bubble', `${sender}-message`);
+        messageElement.textContent = text;
+        const timestamp = document.createElement('span');
+        timestamp.classList.add('timestamp');
+        const now = new Date();
+        const timeString = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+        timestamp.textContent = timeString;
+        const copyBtn = document.createElement('button');
+        copyBtn.classList.add('copy-btn');
+        copyBtn.innerHTML = '<i class="far fa-copy"></i>';
+        copyBtn.title = 'Copy message';
+        copyBtn.addEventListener('click', () => {
+            navigator.clipboard.writeText(messageElement.textContent).then(() => {
+                copyBtn.innerHTML = '<i class="fas fa-check"></i>';
+                setTimeout(() => {
+                    copyBtn.innerHTML = '<i class="far fa-copy"></i>';
+                }, 1500);
+            }).catch(err => {
+                console.error('Failed to copy text: ', err);
+            });
+        });
+        messageWrapper.appendChild(messageElement);
+        messageWrapper.appendChild(copyBtn);
+        messageWrapper.appendChild(timestamp);
+        chatDisplay.appendChild(messageWrapper);
+        chatDisplay.scrollTop = chatDisplay.scrollHeight;
+    }
+
+    function sendMessage() {
+        const message = userInput.value.trim();
+        if (message === '') return;
+        appendMessage(message, 'user');
+        userInput.value = '';
+        getChatbotResponse(message);
+    }
+
+    // --- Attaching Event Listeners ---
+    sendButton.addEventListener('click', sendMessage);
+    userInput.addEventListener('keypress', (e) => {
+        if (e.key === 'Enter') {
+            sendMessage();
+        }
+    });
+
+    clearChatBtn.addEventListener('click', () => {
+        const messagesToRemove = chatDisplay.querySelectorAll('.message-wrapper, .loading-indicator, .initial-message');
+        messagesToRemove.forEach(msg => {
+            msg.remove();
+        });
+        const readyMessage = document.createElement('div');
+        readyMessage.classList.add('initial-message');
+        readyMessage.textContent = 'Chat cleared. Ask me something!';
+        chatDisplay.appendChild(readyMessage);
+    });
+
+    // --- MODAL AND BANNER LOGIC ---
+    const cookieBanner = document.getElementById('cookie-banner');
+    const cookieDismissBtn = document.getElementById('cookie-dismiss-btn');
+    if (cookieBanner && cookieDismissBtn) {
+        cookieDismissBtn.addEventListener('click', () => {
+            cookieBanner.classList.add('hidden');
+        });
+    }
+
+    const termsModal = document.getElementById('terms-modal');
+    const openTermsLink = document.getElementById('open-terms-link');
+    const closeTermsBtn = document.getElementById('close-terms-btn');
+    if (termsModal && openTermsLink && closeTermsBtn) {
+        openTermsLink.addEventListener('click', (e) => { e.preventDefault(); termsModal.classList.add('visible'); });
+        closeTermsBtn.addEventListener('click', () => { termsModal.classList.remove('visible'); });
+        window.addEventListener('click', (e) => { if (e.target === termsModal) { termsModal.classList.remove('visible'); } });
+    }
+
+    const privacyModal = document.getElementById('privacy-modal');
+    const openPrivacyLink = document.getElementById('open-privacy-link');
+    const closePrivacyBtn = document.getElementById('close-privacy-btn');
+    if (privacyModal && openPrivacyLink && closePrivacyBtn) {
+        openPrivacyLink.addEventListener('click', (e) => { e.preventDefault(); privacyModal.classList.add('visible'); });
+        closePrivacyBtn.addEventListener('click', () => { privacyModal.classList.remove('visible'); });
+        window.addEventListener('click', (e) => { if (e.target === privacyModal) { privacyModal.classList.remove('visible'); } });
+    }
     
     // --- Initialize the model when the page loads ---
     initializeModel();
