@@ -38,16 +38,25 @@ document.addEventListener('DOMContentLoaded', () => {
 
         try {
             // Using a specific, known-stable version
-            const { AutoTokenizer } = await import('https://cdn.jsdelivr.net/npm/@xenova/transformers@2.17.1');
+            const { BertTokenizer } = await import('https://cdn.jsdelivr.net/npm/@xenova/transformers@2.17.1');
             
             // EDITED: Define the exact URLs for all necessary files.
             const modelUrl = 'https://github.com/ohuhih/Skibidi/releases/download/test/transformer_chatbot.onnx';
-            // This is the base URL for your tokenizer files in the main repository.
-            const tokenizerPath = 'https://raw.githubusercontent.com/ohuhih/Skibidi/main/models/';
+            const tokenizerUrl = 'https://raw.githubusercontent.com/ohuhih/Skibidi/main/models/tokenizer.json';
+            const tokenizerConfigUrl = 'https://raw.githubusercontent.com/ohuhih/Skibidi/main/models/tokenizer_config.json';
 
-            loadingMessage.textContent = 'Loading tokenizer...';
-            // EDITED: Use the correct function `from_pretrained` to load the tokenizer from your repo.
-            tokenizer = await AutoTokenizer.from_pretrained(tokenizerPath);
+            loadingMessage.textContent = 'Loading tokenizer configuration...';
+            // EDITED: Manually fetch the configuration files to bypass the library's fallback.
+            const tokenizerConfigResponse = await fetch(tokenizerConfigUrl);
+            const tokenizerConfig = await tokenizerConfigResponse.json();
+            
+            const tokenizerResponse = await fetch(tokenizerUrl);
+            const tokenizerJson = await tokenizerResponse.json();
+
+            loadingMessage.textContent = 'Creating tokenizer...';
+            // EDITED: Manually create the tokenizer from the fetched configuration.
+            // Since DistilBERT uses the BertTokenizer, we can instantiate it directly.
+            tokenizer = new BertTokenizer(tokenizerJson, tokenizerConfig);
             
             loadingMessage.textContent = 'Loading model library...';
             // This import attaches the `ort` object to the global window scope.
