@@ -2,23 +2,16 @@
 ================================================================================
 IMPORTANT: HOW TO RUN THIS PROJECT
 ================================================================================
-You cannot run this project by opening the index.html file directly in your
-browser (using a `file:///` path). This will cause security errors (CORS)
-and prevent the AI model from loading.
+This project is designed to be run from a web server, not by opening the
+index.html file directly. Deploying to a service like GitHub Pages (which you
+have done) is the perfect way to run it.
 
-To run this project correctly, you must serve the files from a local web server.
+For local testing, you must use a server that sends the correct security headers.
 
-Here's the easiest way to do it:
-1. Open a terminal or command prompt.
-2. Navigate to the folder where your index.html, style.css, and script.js
-   files are located.
-3. Run the following command:
-   python -m http.server
-
-4. Open your web browser and go to this address:
-   http://localhost:8000
-
-This will serve the files correctly and allow the model to load.
+1. Install Node.js and npm from https://nodejs.org/
+2. In your project folder, run: npm install -g serve
+3. To start the server, run: serve -l 8000 -C
+4. Open your browser to: http://localhost:8000
 ================================================================================
 */
 document.addEventListener('DOMContentLoaded', () => {
@@ -33,9 +26,6 @@ document.addEventListener('DOMContentLoaded', () => {
     let tokenizer = null;
     let isModelReady = false;
 
-    // A flag to ensure the ONNX runtime is initialized only once.
-    let isOrtReady = false;
-
     const context = `
         Paggy Xi Xang is a cutting-edge chatbot designed by a talented team.
         The backend was developed by Alex Martinez and Samira Khan, who focused on API design and database architecture.
@@ -45,17 +35,7 @@ document.addEventListener('DOMContentLoaded', () => {
         The project is managed under the entity Paggy Inc. and was last updated in July 2025.
     `;
 
-    // --- EDITED: New function to ensure ONNX Runtime is ready ---
-    async function ensureOrtReady() {
-        if (isOrtReady) return;
-        // This import attaches the `ort` object to the global window scope.
-        await import('https://cdn.jsdelivr.net/npm/onnxruntime-web/dist/ort.es6.min.js');
-        ort.env.wasm.wasmPaths = 'https://cdn.jsdelivr.net/npm/onnxruntime-web/dist/';
-        isOrtReady = true;
-    }
-
-
-    // --- EDITED: New function to initialize the model on page load ---
+    // --- New function to initialize the model on page load ---
     async function initializeModel() {
         const loadingMessage = document.createElement('div');
         loadingMessage.classList.add('loading-indicator', 'message-bubble');
@@ -64,10 +44,7 @@ document.addEventListener('DOMContentLoaded', () => {
         userInput.disabled = true; // Disable input while loading
 
         try {
-            // 1. Ensure the ONNX runtime is loaded and configured first.
-            loadingMessage.textContent = 'Loading model library...';
-            await ensureOrtReady();
-
+            // Using a specific, known-stable version
             const { AutoTokenizer } = await import('https://cdn.jsdelivr.net/npm/@xenova/transformers@2.17.1');
             
             const modelUrl = 'https://github.com/ohuhih/Skibidi/releases/download/test/transformer_chatbot.onnx';
@@ -76,6 +53,17 @@ document.addEventListener('DOMContentLoaded', () => {
             loadingMessage.textContent = 'Loading tokenizer...';
             tokenizer = await AutoTokenizer.from_pretrained(tokenizerName, { local_files_only: false });
             
+            loadingMessage.textContent = 'Loading model library...';
+            // This import attaches the `ort` object to the global window scope.
+            await import('https://cdn.jsdelivr.net/npm/onnxruntime-web@1.17.1/dist/ort.es6.min.js');
+            
+            // Configure the ONNX runtime
+            ort.env.wasm.wasmPaths = 'https://cdn.jsdelivr.net/npm/onnxruntime-web@1.17.1/dist/';
+            
+            // EDITED: Force single-threaded execution to prevent WASM initialization errors.
+            // This is a key fix for the "RuntimeError: null function" issue.
+            ort.env.wasm.numThreads = 1;
+
             loadingMessage.textContent = 'Loading model from GitHub...';
             session = await ort.InferenceSession.create(modelUrl, {
                 executionProviders: ['wasm'],
