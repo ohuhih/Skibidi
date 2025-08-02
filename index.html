@@ -10,6 +10,8 @@
     <link rel="stylesheet" href="style.css">
     <!-- Font Awesome for social media icons -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- EDITED: Load the ONNX Runtime library directly -->
+    <script src="https://cdn.jsdelivr.net/npm/onnxruntime-web@1.17.1/dist/ort.min.js"></script>
 </head>
 <body>
     <!-- Main container for the chatbot application -->
@@ -17,7 +19,7 @@
         <div class="chat-container">
             <!-- Chatbot header section -->
             <div class="chat-header">
-                Test Case
+                Paggy Xi Xang
                 <!-- NEW: Clear Chat Button -->
                 <button id="clear-chat-btn" class="header-btn" title="Clear Chat">
                     <i class="fas fa-trash-alt"></i>
@@ -28,7 +30,7 @@
             <div id="chat-display" class="chat-display">
                 <!-- EDITED: Initial welcome message with new class -->
                 <div class="initial-message">
-                    Avoid sharing sensitive information.
+                    Twanny time uwu!
                 </div>
                 <!-- Messages will be dynamically added here by JavaScript -->
             </div>
@@ -54,9 +56,9 @@
         <div class="footer-main-content">
             <div class="credit-column">
                 <h4>Development</h4>
-                <p>Pad (Backend)</p>
-                <p>Los (Backend)</p>
-                <p>Yuu (Frontend)</p>
+                <p>Alex Martinez (Backend)</p>
+                <p>Samira Khan (Backend)</p>
+                <p>Jordan Lee (Frontend)</p>
             </div>
              <div class="credit-column">
                 <h4>Resources</h4>
@@ -95,8 +97,8 @@
             <h2>Terms and Conditions</h2>
             <p>Welcome to our website. If you continue to browse and use this website, you are agreeing to comply with and be bound by the following terms and conditions of use...</p>
             <p><strong>1. Use of the Service:</strong> The content of the pages of this website is for your general information and use only. It is subject to change without notice.</p>
-            <p><strong>2. Lorm Ipsom:</strong> This website is provided “as is,” with all faults, and we express no representations, of any kind related to this website or the materials contained on this website.</p>
-            <p><strong>3. Limitation of Liability:</strong> In no event shall we be held liable for anything arising out of or in any way connected with your use of this website.</p>
+            <p><strong>2. No Warranties:</strong> This website is provided “as is,” with all faults, and we express no representations or warranties, of any kind related to this website or the materials contained on this website.</p>
+            <p><strong>3. Limitation of Liability:</strong> In no event shall we, nor any of our officers, directors, and employees, be held liable for anything arising out of or in any way connected with your use of this website.</p>
             <p><em>Last updated: July 2025</em></p>
         </div>
     </div>
@@ -114,7 +116,6 @@
         </div>
     </div>
 
-    <script type="module" src="https://cdn.jsdelivr.net/npm/@xenova/transformers@2.17.1"></script>
-    <script src="script.js"></script>
+    <script src="script.js" type="module"></script>
 </body>
 </html>
