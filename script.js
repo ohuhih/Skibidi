@@ -39,17 +39,17 @@ document.addEventListener('DOMContentLoaded', () => {
             // Using a specific, known-stable version of the all-in-one library
             const { pipeline, AutoTokenizer } = await import('https://cdn.jsdelivr.net/npm/@xenova/transformers@2.17.1');
             
-            // EDITED: This now points to the current directory where your JSON files are.
-            const tokenizerPath = './';
-            // EDITED: This points directly to your ONNX file on GitHub Releases.
+            // EDITED: This now points to the 'models' folder where your JSON files are.
+            const tokenizerPath = './models/';
+            // This points directly to your ONNX file on GitHub Releases.
             const modelUrl = 'https://github.com/ohuhih/Skibidi/releases/download/test/transformer_chatbot.onnx';
 
             loadingMessage.textContent = 'Loading AI model components...';
             
-            // EDITED: Manually load the tokenizer from the local path.
+            // Manually load the tokenizer from the correct local path.
             const tokenizer = await AutoTokenizer.from_pretrained(tokenizerPath);
             
-            // EDITED: Create the pipeline, telling it to use the local tokenizer
+            // Create the pipeline, telling it to use the local tokenizer
             // and download the model from the remote URL.
             questionAnswerer = await pipeline('question-answering', modelUrl, { 
                 tokenizer: tokenizer,
