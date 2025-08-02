@@ -15,7 +15,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const clearChatBtn = document.getElementById('clear-chat-btn');
 
     // --- ONNX MODEL SETUP (Question-Answering) ---
-    let questionAnswerer = null;
+    let session = null;
+    let tokenizer = null;
     let isModelReady = false;
 
     const context = `
@@ -27,7 +28,7 @@ document.addEventListener('DOMContentLoaded', () => {
         The project is managed under the entity Paggy Inc. and was last updated in July 2025.
     `;
 
-    // --- EDITED: New function to initialize the model on page load ---
+    // --- New function to initialize the model on page load ---
     async function initializeModel() {
         const loadingMessage = document.createElement('div');
         loadingMessage.classList.add('loading-indicator', 'message-bubble');
@@ -36,26 +37,30 @@ document.addEventListener('DOMContentLoaded', () => {
         userInput.disabled = true; // Disable input while loading
 
         try {
-            // Using a specific, known-stable version of the all-in-one library
-            const { pipeline, AutoTokenizer } = await import('https://cdn.jsdelivr.net/npm/@xenova/transformers@2.17.1');
+            // Using a specific, known-stable version
+            const { AutoTokenizer } = await import('https://cdn.jsdelivr.net/npm/@xenova/transformers@2.17.1');
             
-            // EDITED: This now points to the 'models' folder where your JSON files are.
-            const tokenizerPath = './models/';
-            // This points directly to your ONNX file on GitHub Releases.
+            // EDITED: This now points directly to the raw content URL of your models folder on GitHub.
+            const tokenizerPath = 'https://raw.githubusercontent.com/ohuhih/Skibidi/main/models/';
+            // This is the URL to your large .onnx file hosted on GitHub Releases.
             const modelUrl = 'https://github.com/ohuhih/Skibidi/releases/download/test/transformer_chatbot.onnx';
 
-            loadingMessage.textContent = 'Loading AI model components...';
+            loadingMessage.textContent = 'Loading tokenizer...';
+            // This will now correctly load your config and tokenizer files from your repo.
+            tokenizer = await AutoTokenizer.from_pretrained(tokenizerPath);
             
-            // Manually load the tokenizer from the correct local path.
-            const tokenizer = await AutoTokenizer.from_pretrained(tokenizerPath);
+            loadingMessage.textContent = 'Loading model library...';
+            // This import attaches the `ort` object to the global window scope.
+            await import('https://cdn.jsdelivr.net/npm/onnxruntime-web@1.17.1/dist/ort.es6.min.js');
             
-            // Create the pipeline, telling it to use the local tokenizer
-            // and download the model from the remote URL.
-            questionAnswerer = await pipeline('question-answering', modelUrl, { 
-                tokenizer: tokenizer,
-                progress_callback: (progress) => {
-                    loadingMessage.textContent = `Loading: ${progress.file} (${Math.round(progress.progress)}%)`;
-                }
+            // Configure the ONNX runtime to prevent browser errors
+            ort.env.wasm.wasmPaths = 'https://cdn.jsdelivr.net/npm/onnxruntime-web@1.17.1/dist/';
+            ort.env.wasm.numThreads = 1;
+
+            loadingMessage.textContent = 'Loading model from GitHub...';
+            session = await ort.InferenceSession.create(modelUrl, {
+                executionProviders: ['wasm'],
+                graphOptimizationLevel: 'all'
             });
 
             chatDisplay.removeChild(loadingMessage);
@@ -70,7 +75,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         } catch (error) {
             console.error('Failed to initialize the AI model:', error);
-            loadingMessage.textContent = 'Error: Could not load model. Check console & file paths.';
+            loadingMessage.textContent = 'Error: Could not load the AI model.';
             loadingMessage.style.backgroundColor = '#f87171'; // Red color for error
             loadingMessage.style.color = '#7f1d1d';
         }
@@ -90,12 +95,37 @@ document.addEventListener('DOMContentLoaded', () => {
         chatDisplay.scrollTop = chatDisplay.scrollHeight;
 
         try {
-            const result = await questionAnswerer(userQuestion, context);
+            const inputs = tokenizer(userQuestion, { text_pair: context, padding: true, truncation: true });
+            
+            const inputIds = new ort.Tensor('int64', inputs.input_ids.data, inputs.input_ids.dims);
+            const attentionMask = new ort.Tensor('int64', inputs.attention_mask.data, inputs.attention_mask.dims);
+            const tokenTypeIds = new ort.Tensor('int64', inputs.token_type_ids.data, inputs.token_type_ids.dims);
+
+            const feeds = {
+                input_ids: inputIds,
+                attention_mask: attentionMask,
+                token_type_ids: tokenTypeIds,
+            };
+
+            const outputs = await session.run(feeds);
+            const startLogits = outputs.start_logits.data;
+            const endLogits = outputs.end_logits.data;
+
+            let bestStart = -1, bestEnd = -1, maxScore = -Infinity;
+            for (let i = 0; i < startLogits.length; i++) {
+                for (let j = i; j < endLogits.length; j++) {
+                    if (startLogits[i] + endLogits[j] > maxScore) {
+                        maxScore = startLogits[i] + endLogits[j];
+                        bestStart = i;
+                        bestEnd = j;
+                    }
+                }
+            }
             
             let chatbotReply = "Sorry, I couldn't find an answer in my knowledge base.";
-            // Check if the model is confident enough in its answer
-            if (result && result.score > 0.3) { // You can adjust this confidence threshold
-                chatbotReply = result.answer;
+            if (bestStart !== -1 && maxScore > 0) { // Add a score threshold
+                const answerTokens = inputs.input_ids.data.slice(bestStart, bestEnd + 1);
+                chatbotReply = tokenizer.decode(answerTokens, { skip_special_tokens: true });
             }
             
             chatDisplay.removeChild(loadingMessage);
