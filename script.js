@@ -25,12 +25,17 @@ document.addEventListener('DOMContentLoaded', () => {
             const tokenizerUrl = 'https://huggingface.co/Nayusai/chtbot/raw/main/tokenizer.json';
             const tokenizerConfigUrl = 'https://huggingface.co/Nayusai/chtbot/raw/main/tokenizer_config.json';
 
-            loadingMessage.textContent = 'Loading tokenizer...';
-            const tokenizerConfig = await (await fetch(tokenizerConfigUrl)).json();
-            const tokenizerJson = await (await fetch(tokenizerUrl)).json();
+            loadingMessage.textContent = 'Loading tokenizer configuration...';
+            const tokenizerConfigResponse = await fetch(tokenizerConfigUrl);
+            const tokenizerConfig = await tokenizerConfigResponse.json();
+            const tokenizerResponse = await fetch(tokenizerUrl);
+            const tokenizerJson = await tokenizerResponse.json();
+
+            loadingMessage.textContent = 'Creating tokenizer...';
             tokenizer = new BertTokenizer(tokenizerJson, tokenizerConfig);
 
-            ort.env.logLevel = 'warning';
+            ort.env.logLevel = 'verbose';
+            ort.env.wasm.wasmPaths = 'https://cdn.jsdelivr.net/npm/onnxruntime-web@1.15.0/dist/';
             ort.env.wasm.numThreads = 1;
             ort.env.wasm.simd = false;
 
@@ -41,8 +46,16 @@ document.addEventListener('DOMContentLoaded', () => {
                 enableMemPattern: false
             });
 
+            // 🔍 Print input/output names
+            console.log('Model input names:', session.inputNames);
+            console.log('Model output names:', session.outputNames);
+
             chatDisplay.removeChild(loadingMessage);
-            appendMessage('Model loaded. You can start chatting!', 'chatbot');
+            const readyMessage = document.createElement('div');
+            readyMessage.classList.add('initial-message');
+            readyMessage.textContent = 'Model loaded. You can start chatting!';
+            chatDisplay.appendChild(readyMessage);
+
             isModelReady = true;
             userInput.disabled = false;
             sendButton.disabled = false;
@@ -55,39 +68,60 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     async function generateText(prompt) {
-        if (!tokenizer || !session) throw new Error("Tokenizer or session not initialized.");
+        if (!tokenizer || !session) {
+            throw new Error("Tokenizer or session not initialized.");
+        }
 
         const padTokenId = 0;
         const srcIds = tokenizer.encode(prompt).filter(id => typeof id === 'number');
-        const paddedSrc = new Array(maxSourceLength).fill(padTokenId);
-        paddedSrc.splice(0, srcIds.length, ...srcIds);
-        const srcTensor = new ort.Tensor('int64', BigInt64Array.from(paddedSrc.map(BigInt)), [1, maxSourceLength]);
+        if (srcIds.length > maxSourceLength) {
+            srcIds.splice(maxSourceLength);
+        }
+        const paddedSrcIds = new Array(maxSourceLength).fill(padTokenId);
+        paddedSrcIds.splice(0, srcIds.length, ...srcIds);
+        const srcTensor = new ort.Tensor('int64', BigInt64Array.from(paddedSrcIds.map(BigInt)), [1, maxSourceLength]);
 
         const bosTokenId = tokenizer.cls_token_id || 0;
-        const eosTokenId = tokenizer.sep_token_id || 1;
         let tgtIds = [bosTokenId];
 
         for (let i = 0; i < maxGenerationLength; i++) {
-            const paddedTgt = new Array(maxGenerationLength).fill(padTokenId);
-            paddedTgt.splice(0, tgtIds.length, ...tgtIds);
-            const tgtTensor = new ort.Tensor('int64', BigInt64Array.from(paddedTgt.map(BigInt)), [1, maxGenerationLength]);
+            const paddedTgtIds = new Array(maxGenerationLength).fill(padTokenId);
+            paddedTgtIds.splice(0, tgtIds.length, ...tgtIds);
+            const tgtTensor = new ort.Tensor('int64', BigInt64Array.from(paddedTgtIds.map(BigInt)), [1, maxGenerationLength]);
 
-            const results = await session.run({ src: srcTensor, tgt: tgtTensor });
+            const feeds = {
+                src: srcTensor,
+                tgt: tgtTensor
+            };
+
+            let results;
+            try {
+                results = await session.run(feeds);
+            } catch (err) {
+                console.error('Error running model:', err);
+                throw err;
+            }
+
             const logits = results.output;
+
             const vocabSize = logits.dims[2];
-            const nextLogits = logits.data.slice(i * vocabSize, (i + 1) * vocabSize);
+            const nextTokenLogits = logits.data.slice(i * vocabSize, (i + 1) * vocabSize);
 
             let maxLogit = -Infinity;
-            let nextId = 0;
+            let nextTokenId = 0;
             for (let j = 0; j < vocabSize; j++) {
-                if (nextLogits[j] > maxLogit) {
-                    maxLogit = nextLogits[j];
-                    nextId = j;
+                if (nextTokenLogits[j] > maxLogit) {
+                    maxLogit = nextTokenLogits[j];
+                    nextTokenId = j;
                 }
             }
 
-            if (nextId === eosTokenId || nextId === padTokenId) break;
-            tgtIds.push(nextId);
+            const eosTokenId = tokenizer.sep_token_id || 1;
+            if (nextTokenId === eosTokenId || nextTokenId === padTokenId) {
+                break;
+            }
+
+            tgtIds.push(nextTokenId);
         }
 
         return tokenizer.decode(tgtIds.slice(1));
@@ -95,7 +129,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     async function getChatbotResponse(userQuestion) {
         if (!isModelReady) {
-            appendMessage("The AI model is still initializing.", 'chatbot');
+            appendMessage("The AI model is still initializing, please wait a moment.", 'chatbot');
             return;
         }
 
@@ -110,57 +144,82 @@ document.addEventListener('DOMContentLoaded', () => {
             chatDisplay.removeChild(loadingMessage);
             appendMessage(reply || "...", 'chatbot');
         } catch (error) {
-            console.error('Error running model:', error);
-            if (chatDisplay.contains(loadingMessage)) chatDisplay.removeChild(loadingMessage);
-            appendMessage('Error: Could not run the model.', 'chatbot');
+            if (loadingMessage.parentNode === chatDisplay) {
+                chatDisplay.removeChild(loadingMessage);
+            }
+            console.error('Error running the chatbot model:', error);
+            appendMessage('Error: Could not run the model. Please check the console.', 'chatbot');
         }
     }
 
     function appendMessage(text, sender) {
-        const wrapper = document.createElement('div');
-        wrapper.classList.add('message-wrapper', `${sender}-wrapper`);
+        const messageWrapper = document.createElement('div');
+        messageWrapper.classList.add('message-wrapper', `${sender}-wrapper`);
 
-        const bubble = document.createElement('div');
-        bubble.classList.add('message-bubble', `${sender}-message`);
-        bubble.textContent = text;
+        const messageElement = document.createElement('div');
+        messageElement.classList.add('message-bubble', `${sender}-message`);
+        messageElement.textContent = text;
 
         const timestamp = document.createElement('span');
         timestamp.classList.add('timestamp');
-        timestamp.textContent = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+        const now = new Date();
+        const timeString = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+        timestamp.textContent = timeString;
 
         const copyBtn = document.createElement('button');
         copyBtn.classList.add('copy-btn');
         copyBtn.innerHTML = '<i class="far fa-copy"></i>';
         copyBtn.title = 'Copy message';
+
         copyBtn.addEventListener('click', () => {
-            navigator.clipboard.writeText(bubble.textContent);
-            copyBtn.innerHTML = '<i class="fas fa-check"></i>';
-            setTimeout(() => copyBtn.innerHTML = '<i class="far fa-copy"></i>', 1500);
+            const textToCopy = messageElement.textContent;
+            const textArea = document.createElement('textarea');
+            textArea.value = textToCopy;
+            document.body.appendChild(textArea);
+            textArea.select();
+            try {
+                document.execCommand('copy');
+                copyBtn.innerHTML = '<i class="fas fa-check"></i>';
+                setTimeout(() => {
+                    copyBtn.innerHTML = '<i class="far fa-copy"></i>';
+                }, 1500);
+            } catch (err) {
+                console.error('Failed to copy text: ', err);
+            }
+            document.body.removeChild(textArea);
         });
 
-        wrapper.appendChild(bubble);
-        wrapper.appendChild(copyBtn);
-        wrapper.appendChild(timestamp);
-        chatDisplay.appendChild(wrapper);
+        messageWrapper.appendChild(messageElement);
+        messageWrapper.appendChild(copyBtn);
+        messageWrapper.appendChild(timestamp);
+
+        chatDisplay.appendChild(messageWrapper);
         chatDisplay.scrollTop = chatDisplay.scrollHeight;
     }
 
     function sendMessage() {
         const message = userInput.value.trim();
-        if (!message) return;
+        if (message === '') return;
+
         appendMessage(message, 'user');
         userInput.value = '';
         getChatbotResponse(message);
     }
 
     sendButton.addEventListener('click', sendMessage);
-    userInput.addEventListener('keypress', e => {
-        if (e.key === 'Enter') sendMessage();
+    userInput.addEventListener('keypress', (e) => {
+        if (e.key === 'Enter') {
+            sendMessage();
+        }
     });
 
     clearChatBtn.addEventListener('click', () => {
-        chatDisplay.querySelectorAll('.message-wrapper, .loading-indicator, .initial-message')
-            .forEach(msg => msg.remove());
+        const messagesToRemove = chatDisplay.querySelectorAll('.message-wrapper, .loading-indicator, .initial-message');
+        messagesToRemove.forEach(msg => {
+            if (!msg.classList.contains('initial-message')) {
+                msg.remove();
+            }
+        });
     });
 
     initializeModel();
